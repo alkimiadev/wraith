@@ -1,4 +1,4 @@
-# ADR-006: NAPI Exposes Single Duplex Stream
+# ADR-007: NAPI Exposes Single Duplex Stream
 
 ## Status
 Accepted

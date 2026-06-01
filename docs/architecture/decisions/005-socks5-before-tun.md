@@ -28,11 +28,11 @@ TUN forwards to SOCKS5 rather than directly to SSH because:
 - No root code in the core binary
 
 ## Consequences
-- **Positive**: Core binary is root-free. TUN is optional and separate.
+- **Positive**: Core binary is root-free. TUN functionality is provided by the external `tun2proxy` tool (ADR-014).
 - **Positive**: SOCKS5 is testable without TUN — just `curl` against it.
-- **Positive**: TUN implementation is simplified — it's a thin wrapper around tun2proxy's pattern pointed at localhost:1080.
-- **Negative**: TUN adds one network hop (TUN → localhost SOCKS5 → SSH). The latency impact is negligible (localhost).
-- **Negative**: SOCKS5 doesn't capture UDP (except DNS via SOCKS5h). TUN mode would handle non-DNS UDP via the SOCKS5 UDP association or drop it.
+- **Positive**: The TUN approach is validated by tun2proxy, a well-tested existing tool. No custom TUN code to maintain.
+- **Negative**: VPN-like behavior requires running `tun2proxy` alongside `wraith connect` — two processes instead of one integrated binary.
+- **Negative**: SOCKS5 doesn't capture UDP (except DNS via SOCKS5h). TUN mode via tun2proxy handles this separately.
 
 ## References
 - [client.md](../client.md)

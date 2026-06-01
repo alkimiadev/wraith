@@ -9,20 +9,20 @@ last_updated: 2026-06-01
 
 Two integration layers that enable TypeScript/JavaScript consumers to use wraith as a transport:
 
-1. **NAPI wrapper** (`@alkdev/wraith`) — A minimal Node.js native addon exposing `connect()` and `serve()` that return duplex streams
+1. **NAPI wrapper** (`@alkdev/wraith`) — A Node.js native addon (via napi-rs) exposing `connect()` and `serve()` that return duplex streams
 2. **PubSub event target** (`@alkdev/pubsub` adapter) — An implementation of the `TypedEventTarget` interface that routes events over wraith's SSH channel
 
 ## Why
 
 The wraith Rust binary serves CLI users. But the broader ecosystem (pubsub, operations, agent spokes) is TypeScript-first. These integration layers let TypeScript code use wraith's transport without reimplementing SSH.
 
-The NAPI surface is intentionally tiny — it exposes the transport connection, not the full SSH protocol. The pubsub adapter is also minimal — it implements `TypedEventTarget` and serializes `EventEnvelope` JSON over the stream.
+The NAPI surface is intentionally minimal — it exposes transport connections as duplex streams, not the full SSH protocol. The pubsub adapter wraps those streams with `EventEnvelope` serialization.
 
 ## Architecture
 
-### NAPI Wrapper
+### NAPI Wrapper (napi-rs)
 
-The wrapper exposes a single function that establishes a wraith connection and returns a Node.js `Duplex` stream:
+The wrapper uses napi-rs (ADR-015) and exposes two functions (ADR-016):
 
 ```typescript
 // @alkdev/wraith (TypeScript side)
@@ -35,25 +35,50 @@ interface WraithConnectOptions {
   // Transport
   transport: 'tcp' | 'tls' | 'iroh';
   // Auth
-  identity?: string;         // path to SSH key
+  identity?: string;         // path to SSH key, or Buffer with key data
   // TLS
   tlsServerName?: string;    // SNI hostname
-  insecure?: boolean;         // accept self-signed certs
+  insecure?: boolean;        // accept self-signed certs
   // iroh
-  irohRelay?: string;        // relay URL (default: n0)
+  irohRelay?: string;       // relay URL (default: n0)
+  // Proxy
+  proxy?: string;            // upstream SOCKS5/HTTP proxy URL
 }
 
-function connect(options: WraithConnectOptions): Duplex;
+interface WraithServeOptions {
+  // Transport
+  transport: 'tcp' | 'tls' | 'iroh';
+  // Auth
+  hostKey?: string;          // path to SSH host key, or Buffer with key data
+  authorizedKeys?: string;  // path to authorized_keys, or Buffer with key data
+  certAuthority?: string;   // path to CA public key for cert-authority auth
+  // TLS
+  tlsCert?: string;          // path to TLS cert
+  tlsKey?: string;           // path to TLS key
+  acmeDomain?: string;      // ACME domain for auto-cert (ADR-008)
+  // Listen
+  listen?: string;           // listen address (default: 0.0.0.0:22)
+  // iroh
+  irohRelay?: string;       // relay URL (default: n0)
+}
+
+// Returns a Duplex stream for the SSH channel
+function connect(options: WraithConnectOptions): Promise<Duplex>;
+
+// Returns a server object with close() and connection events
+function serve(options: WraithServeOptions): Promise<WraithServer>;
+
+interface WraithServer {
+  close(): Promise<void>;
+  onConnection(callback: (stream: Duplex, info: ConnectionInfo) => void): void;
+}
 ```
 
-The `Duplex` stream carries raw SSH channel data. On the Rust side, the NAPI function:
+The NAPI layer is **transport-agnostic** — it doesn't know about pubsub's `EventEnvelope`. The pubsub adapter wraps the `Duplex` stream to implement `TypedEventTarget`. This separation ensures the NAPI wrapper is reusable for any stream-based protocol, not tied specifically to pubsub.
 
-1. Creates a transport (TCP/TLS/iroh) based on options
-2. Establishes an SSH session via `client::connect_stream()`
-3. Opens a single `direct_tcpip` channel to a well-known destination (or uses a control protocol)
-4. Returns the channel as a NAPI `Buffer` stream
+### Programmatic Configuration (ADR-011)
 
-**Key design decision**: The NAPI wrapper does NOT expose the full SSH channel multiplexing API. It returns one duplex stream. If the TypeScript consumer needs multiple logical channels, it multiplexes them itself (e.g., via pubsub's event routing).
+Both `connect()` and `serve()` accept options as plain objects. No file paths are mandatory — keys can be provided as `Buffer` data directly, making programmatic usage straightforward. Environment variables (`WRAITH_SERVER`, `WRAITH_IDENTITY`) provide convenience defaults.
 
 ### PubSub Event Target Adapter
 
@@ -63,7 +88,7 @@ This implements `TypedEventTarget` from `@alkdev/pubsub`:
 // @alkdev/pubsub (new adapter: event-target-wraith.ts)
 
 export interface WraithEventTargetOptions {
-  stream: Duplex;  // from @alkdev/wraith.connect()
+  stream: Duplex;  // from @alkdev/wraith.connect() or serve()
 }
 
 export interface WraithEventTarget<TEvent extends TypedEvent>
@@ -85,9 +110,11 @@ Wire protocol (same as other pubsub adapters):
 
 ### On the Server Side
 
-The wraith server exposes a "control channel" — a special `direct_tcpip` destination (e.g., `wraith-control:0`) that routes to the pubsub event bus instead of a TCP target. When a client connects to this destination:
+The wraith server uses a reserved `direct_tcpip` destination (`wraith-control:0`) for the pubsub control channel (ADR-018). When a client connects to this destination:
 
-1. Server's `channel_open_direct_tcpip` handler detects the special target
+1. The server's `channel_open_direct_tcpip` handler detects the reserved `wraith-control` target
+
+When a client connects to this destination:
 2. Instead of opening a TCP connection, it bridges the channel to its local pubsub event bus
 3. `EventEnvelope` JSON flows bidirectionally over the SSH channel
 
@@ -104,17 +131,21 @@ The pubsub adapter doesn't care which side initiated the SSH session. It just ne
 
 ## Constraints
 
-- The NAPI wrapper exposes a single duplex stream, not the full SSH channel API. Multiplexing is done at the pubsub layer.
+- The NAPI wrapper exposes duplex streams, not the full SSH channel API. Multiplexing is done at the pubsub layer.
 - The pubsub wire protocol is length-prefixed JSON, matching the existing adapter pattern. Binary payloads should be base64-encoded in the `EventEnvelope.payload`.
 - The NAPI binary size will be ~5-10MB (includes russh + tokio + cryptography). The `iroh` feature adds significant size; it should be an optional feature.
+- Keys can be provided as file paths or `Buffer` data, supporting both CLI and programmatic usage patterns (ADR-011).
 
 ## Open Questions
 
-- **OQ-10**: Whether the NAPI wrapper should expose raw channel access or a higher-level "send JSON, receive JSON" API
-- **OQ-11**: Whether to use napi-rs or uniffi for the FFI bridge (napi-rs is more established for Node.js, uniffi supports more targets)
+None — all resolved.
 
 ## Design Decisions
 
 | ADR | Decision | Summary |
 |-----|----------|---------|
 | [007](decisions/007-napi-single-stream.md) | NAPI exposes single duplex stream | No SSH multiplexing in JS, pubsub handles it |
+| [011](decisions/011-no-ssh-config-programmatic-api.md) | Programmatic-first API | No file-based config; options are structs or env vars |
+| [015](decisions/015-napi-rs-for-ffi-bridge.md) | napi-rs for FFI | Standard Node.js native addon tooling |
+| [016](decisions/016-napi-expose-connect-and-serve.md) | Both connect() and serve() | NAPI exposes client and server sides from the start |
+| [018](decisions/018-control-channel-for-pubsub.md) | Control channel for pubsub | Reserved `wraith-control` destination for event bus |

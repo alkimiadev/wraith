@@ -7,11 +7,11 @@ last_updated: 2026-06-01
 
 ## What
 
-The wraith client establishes an SSH session to a server (via pluggable transport) and exposes local interfaces for routing traffic through that session: SOCKS5 proxy, port forwarding, and eventually TUN.
+The wraith client establishes an SSH session to a server (via pluggable transport) and exposes a local SOCKS5 proxy for routing traffic through that session. Port forwarding (`-L` / `-R` style) covers specific service access like Postgres or Redis.
 
 ## Why
 
-Users need a way to route traffic through the SSH tunnel. SOCKS5 is the primary interface — it's standard, well-supported by browsers and CLI tools, and needs no privileges. Port forwarding (`-L` / `-R` style) covers specific service access like Postgres or Redis. TUN covers full-system VPN-like behavior.
+Users need a way to route traffic through the SSH tunnel. SOCKS5 is the primary interface — it's standard, well-supported by browsers and CLI tools, and needs no privileges. Port forwarding covers specific service access. For VPN-like "route all traffic" behavior, users run `tun2proxy` alongside wraith (ADR-014).
 
 ## Architecture
 
@@ -21,11 +21,11 @@ Users need a way to route traffic through the SSH tunnel. SOCKS5 is the primary 
 ┌────────────────────────────────────────────────────────┐
 │                     wraith connect                      │
 │                                                        │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │ SOCKS5   │ │ Port     │ │ Remote   │ │ (TUN     │ │
-│  │ Server   │ │ Forward  │ │ Forward  │ │  shim)   │ │
-│  │ :1080    │ │ -L spec  │ │ -R spec  │ │ separate │ │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────┘ │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐              │
+│  │ SOCKS5   │ │ Port     │ │ Remote   │              │
+│  │ Server   │ │ Forward  │ │ Forward  │              │
+│  │ :1080    │ │ -L spec  │ │ -R spec  │              │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘              │
 │       │             │             │                     │
 │       ▼             ▼             ▼                     │
 │  ┌─────────────────────────────────┐                   │
@@ -94,6 +94,16 @@ On transport failure:
 
 Existing TCP connections through the tunnel are lost on reconnect. This is acceptable — same as any VPN.
 
+### Programmatic Configuration (ADR-011)
+
+The client uses programmatic configuration — no `~/.ssh/config` parsing, no custom config files. Configuration comes from:
+
+1. **CLI flags**: `--server`, `--identity`, `--transport`, etc.
+2. **Library API**: `ConnectOptions` and `ServeOptions` structs in `wraith-core`, constructable programmatically
+3. **Environment variables**: `WRAITH_SERVER`, `WRAITH_IDENTITY` as convenience defaults
+
+This approach avoids cross-platform path issues (`~` expansion, Windows `USERPROFILE`) and makes the library API clean for programmatic consumers like the NAPI wrapper. Keys can be provided as file paths or in-memory data.
+
 ### CLI Interface
 
 ```bash
@@ -103,8 +113,17 @@ wraith connect --server example.com --identity ~/.ssh/id_ed25519
 # With TLS
 wraith connect --server example.com:443 --transport tls --identity ~/.ssh/id_ed25519
 
+# With TLS + insecure (self-signed certs)
+wraith connect --server example.com:443 --transport tls --identity ~/.ssh/id_ed25519 --insecure
+
 # With iroh (no public IP needed)
 wraith connect --peer <endpoint-id> --transport iroh --identity ~/.ssh/id_ed25519
+
+# With iroh + custom relay
+wraith connect --peer <endpoint-id> --transport iroh --identity ~/.ssh/id_ed25519 --iroh-relay https://relay.example.com
+
+# With iroh + proxy (transport chaining)
+wraith connect --peer <endpoint-id> --transport iroh --identity ~/.ssh/id_ed25519 --proxy socks5://127.0.0.1:1080
 
 # SOCKS5 on custom port
 wraith connect --server example.com --socks5 127.0.0.1:1080 --identity ~/.ssh/id_ed25519
@@ -114,30 +133,36 @@ wraith connect --server example.com --forward 5432:db.internal:5432 --forward 63
 
 # All options
 wraith connect \
-  --server <addr> \          # TCP server address (required for tcp/tls)
+  --server <addr> \          # TCP/TLS server address (required for tcp/tls)
   --peer <endpoint-id> \    # iroh peer ID (required for iroh)
   --transport tcp|tls|iroh \ # Transport mode
-  --identity <path> \       # SSH private key path
+  --identity <path-or-buffer> \ # SSH private key (path or in-memory)
   --socks5 <addr:port> \    # SOCKS5 listen address (default: 127.0.0.1:1080)
   --forward <spec> \        # Port forward spec (repeatable)
   --remote-forward <spec> \ # Remote port forward spec (repeatable)
-  --proxy <url>              # Upstream proxy (SOCKS5/HTTP CONNECT)
+  --proxy <url> \            # Upstream proxy (socks5:// or http://)
+  --iroh-relay <url> \      # iroh relay URL (default: n0 relay)
+  --tls-server-name <host> \ # SNI hostname for TLS
+  --insecure                 # Accept self-signed TLS certs
 ```
 
 ## Constraints
 
 - SOCKS5 is always enabled when `wraith connect` runs (it's the primary interface). Port forwards are optional.
-- The client does not know or log what destinations are accessed. The SOCKS5 server connects and proxies — no logging of SOCKS5 request targets.
-- Authentication is Ed25519 public key only by default. Password auth supported but not recommended. (OQ-04)
+- The client does not log tunnel destinations. The SOCKS5 server connects and proxies — no logging of SOCKS5 request targets.
+- Authentication is Ed25519 public key or OpenSSH certificate (ADR-012). No password authentication over SSH.
 - Only one SSH session per `wraith connect` process. Multiple sessions = multiple processes (or a future multiplexer).
+- No `~/.ssh/config` parsing. Configuration is programmatic via CLI flags, env vars, or library API structs (ADR-011).
+- VPN-like "route all traffic" behavior is provided by running `tun2proxy --proxy socks5://127.0.0.1:1080` alongside the client, not by a built-in TUN interface (ADR-014).
 
 ## Open Questions
 
-- **OQ-04**: Authentication beyond Ed25519 keys
-- **OQ-06**: Whether to support SSH config file parsing (`~/.ssh/config`) for default host/key/port settings
+None — all resolved.
 
 ## Design Decisions
 
 | ADR | Decision | Summary |
 |-----|----------|---------|
-| [005](decisions/005-socks5-before-tun.md) | SOCKS5 first | SOCKS5 is the primary interface, TUN forwards to it |
+| [005](decisions/005-socks5-before-tun.md) | SOCKS5 first | SOCKS5 is the primary interface; TUN is external (tun2proxy) |
+| [011](decisions/011-no-ssh-config-programmatic-api.md) | Programmatic-first API | No file-based config; options are structs, env vars, or CLI flags |
+| [012](decisions/012-auth-ed25519-and-cert-authority.md) | Key + cert-authority | No password auth; OpenSSH cert-authority for multi-user |

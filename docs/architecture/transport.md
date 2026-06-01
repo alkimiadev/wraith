@@ -84,6 +84,32 @@ let stream = tokio::io::join(recv_stream, send_stream);
 
 See ADR-003 for the decision to use `tokio::io::join` over a custom wrapper.
 
+### iroh Relay Configuration
+
+By default, iroh transport uses n0's free relay servers (`https://relay.iroh.network/`). This provides zero-config NAT traversal for testing and development. For production deployments, users override with `--iroh-relay <url>` to point to a self-hosted relay.
+
+The relay URL is passed to iroh's `Endpoint::builder()` configuration. Self-hosted relay setup is documented in the project wiki.
+
+See ADR-009 for the decision to default to n0's relay with override.
+
+### Transport Chaining
+
+Transports can be nested. The CLI supports `--transport iroh --proxy socks5://...` natively (ADR-010):
+
+```bash
+wraith connect --transport iroh --proxy socks5://127.0.0.1:1080
+```
+
+This routes iroh's outbound TCP connections through the specified SOCKS5 proxy. iroh's `Endpoint::builder` accepts proxy configuration directly, so the implementation is minimal — parse the proxy URL and pass it to the endpoint builder.
+
+For other combinations:
+- TCP + TLS is already implicit (TLS wraps TCP in `TlsTransport`)
+- TLS + SOCKS5 proxy is also supported via `--proxy` with `--transport tls`
+
+**Note**: `--proxy` has different semantics on the client vs the server:
+- **Client**: `--proxy` routes the *transport connection* through the proxy (e.g., iroh endpoint → SOCKS5 → iroh relay)
+- **Server**: `--proxy` routes *outbound target connections* through the proxy (e.g., SSH channel request → SOCKS5 → target host)
+
 ### Connection Lifecycle
 
 ```
@@ -107,27 +133,16 @@ Client                                          Server
   │  └────────────────────────────────────┘       │
 ```
 
-## Transport Chaining
-
-Transports can be nested. A common pattern: iroh transport through an upstream SOCKS5 proxy (which itself tunnels through another wraith instance):
-
-```
-wraith connect --transport iroh --proxy socks5://127.0.0.1:1080
-```
-
-The iroh endpoint's outbound TCP connections go through the SOCKS5 proxy, which itself tunnels through another wraith instance's SSH channel. The SOCKS5 proxy is provided by the core SOCKS5 server — no special chaining code needed.
-
 ## Constraints
 
 - SSH sees only the stream. It never opens its own TCP connections. (ADR-004)
 - Each transport produces exactly one stream per SSH session. Multiple sessions need multiple `connect()` calls.
 - The iroh transport reuses a single `Endpoint` across multiple sessions (one QUIC connection per peer, multiple `open_bi()` streams). The endpoint is created once and shared.
-- TLS transport requires certificate configuration on the server side. The client can accept any certificate (self-signed) or verify against a CA.
+- TLS transport requires certificate configuration on the server side. The client can accept any certificate (self-signed) or verify against a CA. Server-side ACME is supported (ADR-008).
 
 ## Open Questions
 
-- **OQ-02**: iroh relay configuration defaults
-- **OQ-05**: Whether to support transport chaining in the CLI (`--transport iroh --proxy socks5://...`) or keep it as a separate manual configuration
+None — all resolved.
 
 ## Design Decisions
 
@@ -136,3 +151,6 @@ The iroh endpoint's outbound TCP connections go through the SOCKS5 proxy, which 
 | [001](decisions/001-pluggable-transport.md) | Pluggable transport | Transport trait produces stream, SSH consumes it |
 | [003](decisions/003-iroh-stream-join.md) | iroh stream join | `tokio::io::join` combines QUIC halves |
 | [004](decisions/004-ssh-over-transport.md) | SSH over transport | SSH never touches TCP/iroh/TLS directly |
+| [008](decisions/008-acme-lets-encrypt.md) | ACME/Let's Encrypt | Auto-provision TLS certs, domain and IP paths |
+| [009](decisions/009-default-iroh-relay.md) | Default iroh relay | n0 relay by default, `--iroh-relay` override |
+| [010](decisions/010-transport-chaining-cli.md) | Transport chaining | `--proxy` works with all transports natively |

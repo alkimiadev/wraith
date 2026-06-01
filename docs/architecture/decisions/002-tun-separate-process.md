@@ -1,7 +1,7 @@
 # ADR-002: TUN Shim as Separate Process
 
 ## Status
-Accepted
+Superseded by ADR-014
 
 ## Context
 TUN interface creation requires root privileges or `CAP_NET_ADMIN` on Linux, Administrator on Windows, or platform-specific VPN APIs on macOS/iOS/Android. If the core wraith binary required these privileges, the attack surface of root-required code would include the entire SSH implementation, key handling, and transport negotiation.
