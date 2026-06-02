@@ -125,7 +125,7 @@ impl LocalForwarder {
         handle: Arc<Mutex<client::Handle<H>>>,
     ) -> Result<(), ForwardError> {
         let listen_addr = self.spec.listen_addr()?;
-        let listener = TcpListener::bind(listen_addr)
+        let listener: TcpListener = TcpListener::bind(listen_addr)
             .await
             .map_err(|e| ForwardError::BindFailed { source: e })?;
         self.listener = Some(listener);
