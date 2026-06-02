@@ -8,7 +8,7 @@ name = "wraith_core"
 
 [features]
 default = []
-tls = ["dep:tokio-rustls", "dep:rustls"]
+tls = ["dep:tokio-rustls", "dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
 iroh = ["dep:iroh"]
 acme = ["dep:rustls-acme", "tls"]
 testutil = []
@@ -22,11 +22,14 @@ anyhow = "1"
 thiserror = "2"
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-rustls = { version = "0.26", optional = true }
-rustls = { version = "0.23", optional = true }
+rustls = { version = "0.23", optional = true, features = ["aws_lc_rs"] }
+rustls-pki-types = { version = "1", optional = true }
 rustls-acme = { version = "0.12", optional = true }
+webpki-roots = { version = "0.26", optional = true }
 iroh = { version = "0.34", optional = true }
 async-trait = "0.1"
 
 [dev-dependencies]
-wraith-core = { path = ".", features = ["testutil"] }
+wraith-core = { path = ".", features = ["testutil", "tls"] }
 tempfile = "3"
+rcgen = "0.14"

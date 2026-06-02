@@ -2,6 +2,12 @@ mod tcp;
 
 pub use tcp::{TcpAcceptor, TcpTransport};
 
+#[cfg(feature = "tls")]
+mod tls;
+
+#[cfg(feature = "tls")]
+pub use tls::{AcmeConfig, TlsAcceptor, TlsTransport};
+
 use std::net::SocketAddr;
 
 use anyhow::Result;
