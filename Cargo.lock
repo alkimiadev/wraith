@@ -5461,6 +5461,7 @@ name = "wraith-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "iroh",
  "russh",
  "rustls",
@@ -5470,6 +5471,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tracing",
+ "wraith-core",
 ]
 
 [[package]]

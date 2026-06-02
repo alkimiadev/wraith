@@ -11,6 +11,8 @@ default = []
 tls = ["dep:tokio-rustls", "dep:rustls"]
 iroh = ["dep:iroh"]
 acme = ["dep:rustls-acme", "tls"]
+testutil = []
+transport-traits = []
 
 [dependencies]
 russh = "0.49"
@@ -23,3 +25,7 @@ tokio-rustls = { version = "0.26", optional = true }
 rustls = { version = "0.23", optional = true }
 rustls-acme = { version = "0.12", optional = true }
 iroh = { version = "0.34", optional = true }
+async-trait = "0.1"
+
+[dev-dependencies]
+wraith-core = { path = ".", features = ["testutil"] }

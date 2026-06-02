@@ -9,3 +9,4 @@ pub mod error;
 pub mod testutil;
 
 pub use error::{AuthError, ChannelError, ConfigError, TransportError};
+pub use transport::{Transport, TransportAcceptor, TransportInfo, TransportKind};
