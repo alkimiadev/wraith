@@ -10,7 +10,7 @@ name = "wraith_core"
 default = []
 tls = ["dep:tokio-rustls", "dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
 iroh = ["dep:iroh", "dep:url"]
-acme = ["dep:rustls-acme", "tls"]
+acme = ["dep:rustls-acme", "dep:futures", "tls"]
 testutil = []
 transport-traits = []
 
@@ -25,6 +25,7 @@ tokio-rustls = { version = "0.26", optional = true }
 rustls = { version = "0.23", optional = true, features = ["aws_lc_rs"] }
 rustls-pki-types = { version = "1", optional = true }
 rustls-acme = { version = "0.12", optional = true }
+futures = { version = "0.3", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 iroh = { version = "0.34", optional = true }
 url = { version = "2", optional = true }
