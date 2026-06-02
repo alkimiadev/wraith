@@ -12,3 +12,4 @@ pub use error::{AuthError, ChannelError, ConfigError, ForwardError, TransportErr
 pub use transport::{Transport, TransportAcceptor, TransportInfo, TransportKind};
 pub use client::channel_manager::{ChannelManager, ForwardRequest};
 pub use client::connect::{ClientSession, ConnectError, ConnectOptions, TransportMode};
+pub use server::serve::{Server, ServeError, ServeOptions, ServeTransportMode};
