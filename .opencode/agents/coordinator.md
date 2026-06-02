@@ -91,7 +91,7 @@ This is the most critical coordinator responsibility. Follow it exactly:
 
 3. **Validate after every merge:**
    ```bash
-   deno check mod.ts src/graphs/mod.ts src/sqlite/mod.ts && deno lint && deno test --allow-all test/
+   cargo build && cargo clippy -- -D warnings && cargo test
    ```
    Never skip this. A merge that breaks the build is worse than no merge.
 
@@ -184,14 +184,14 @@ also include:
    `git fetch origin && git merge origin/main --no-edit` before starting, since
    main may have advanced since their worktree was created
 3. **Key references** — Which source files and architecture docs to read
-4. **Project constraints** — Important rules from the repo (no comments, TypeBox
-   not Zod, etc.)
+4. **Project constraints** — Important rules from the repo (no comments,
+   error handling conventions, etc.)
 5. **Done signal** — Use `worktree({action: "notify", ...})` when complete
 
 Example prompt template:
 
 ```
-You are an implementation specialist for the @alkdev/storage project.
+You are an implementation specialist for the @alkdev/wraith project.
 
 Your task: {{task}}
 
@@ -199,19 +199,18 @@ Your task: {{task}}
 2. Read the task file, then read all referenced source files and architecture docs.
 3. Pull main into your branch first: git fetch origin && git merge origin/main --no-edit
 4. Implement the changes, following all acceptance criteria.
-5. Run deno check mod.ts src/graphs/mod.ts src/sqlite/mod.ts, deno lint, deno test --allow-all test/. Fix any failures.
+5. Run cargo build, cargo clippy -- -D warnings, cargo test, cargo fmt --check. Fix any failures.
 6. Commit ONLY source code — do not commit task files (tasks/*.md). The coordinator manages task status on main.
 7. Push: git push origin $(git branch --show-current)
 8. Notify: worktree({action: "notify", args: {message: "Task completed: {{task}}. <brief summary>", level: "info"}})
 
-Key project constraints (@alkdev/storage):
-- Deno-first: use deno check, deno lint, deno fmt, deno test (not npm)
+Key project constraints (@alkdev/wraith):
+- Rust: use cargo build, cargo clippy, cargo fmt, cargo test
 - No comments in code
-- TypeBox (not Zod): use @alkdev/typebox and @alkdev/drizzlebox
-- JSR slow types excluded (known debt in drizzle generics)
-- Injectable clients, no module-level side effects
-- Import .ts extensions explicitly
-- TypeBox schemas are values+types (no import type for schema symbols)
+- anyhow::Result for application errors, thiserror for library error types
+- Feature flags for transports (tls, iroh, acme)
+- Async via tokio runtime
+- No panics in library code
 ```
 
 ### Partial Generation Spawning
@@ -230,7 +229,7 @@ For example, if Generation 2 has tasks A (depends on X), B (depends on Y), and C
 ### Overlap Awareness
 
 When spawning parallel tasks, check if they modify overlapping source files.
-Tasks that share source files (e.g., both modify `src/call.ts`) are likely to
+Tasks that share source files (e.g., both modify `src/transport.rs`) are likely to
 cause merge conflicts. You can still run them in parallel — just be prepared to
 resolve conflicts during merge.
 

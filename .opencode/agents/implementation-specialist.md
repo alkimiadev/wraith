@@ -61,10 +61,10 @@ worktree. This means:
 
 ```bash
 # ✅ CORRECT — workdir is auto-injected
-deno test --allow-all test/
+cargo test
 
 # ✅ ALSO CORRECT — explicit workdir still works
-bash({ command: "npm test", workdir: "/path/to/worktree" })
+bash({ command: "cargo test", workdir: "/path/to/worktree" })
 ```
 
 **Do NOT use `cd` in commands** — it doesn't persist and the plugin handles
@@ -106,23 +106,23 @@ If blocked → Safe Exit (see below)
 
 **File paths:** Always relative to worktree root
 
-- ✅ `src/graphs/mod.ts`
+- ✅ `src/transport.rs`
 - ❌ Absolute paths to the main repo (outside your worktree)
 
 ### 4. Self-Verify
 
 ```bash
-# Type check
-deno check mod.ts src/graphs/mod.ts src/sqlite/mod.ts
+# Build
+cargo build
 
 # Lint
-deno lint
+cargo clippy -- -D warnings
 
 # Run tests
-deno test --allow-all test/
+cargo test
 
 # Format check
-deno fmt --check
+cargo fmt --check
 ```
 
 Check each acceptance criterion in the task file.
@@ -205,23 +205,20 @@ When available, use memory tools to manage your context:
 
 This is especially important for complex tasks that span many file operations.
 
-## Project Conventions (@alkdev/storage)
+## Project Conventions
 
 Read `AGENTS.md` at project root for full details. Key rules:
 
 1. **No comments in code** — Per project convention.
-2. **TypeBox, not Zod** — Use `@alkdev/typebox` and `@alkdev/drizzlebox` for
-   schema/validation.
-3. **Explicit .ts extensions** — All imports must include the `.ts` extension
-   (Deno convention).
-4. **JSR slow types** — Drizzle's deeply inferred generics make explicit
-   annotations impractical. Use `--allow-slow-types`. Do not annotate drizzle
-   table definitions.
-5. **Injectable clients** — `createSqliteDatabase(client)` takes a client, not
-   env vars. No module-level side effects.
-6. **Naming conventions** — TypeBox schemas: PascalCase (`NodeType`). Drizzle
-   tables: camelCase (`graphTypes`). Drizzlebox schemas: PascalCase
-   (`InsertGraph`).
+2. **Error handling** — Use `anyhow::Result` for application code, `thiserror` for
+   library error types. Never panic in library code.
+3. **Feature flags** — Transports are feature-gated (`tls`, `iroh`, `acme`). Base
+   crate should compile lean.
+4. **Async runtime** — `tokio` is the async runtime. All I/O is async.
+5. **Naming conventions** — Rust standard: `snake_case` for functions/variables/
+   modules, `PascalCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants.
+6. **Module structure** — One module per component under `src/`. Re-export via
+   `mod.rs` or `lib.rs` as appropriate.
 
 ## Key Principles
 

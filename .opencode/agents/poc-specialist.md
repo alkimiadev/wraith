@@ -57,7 +57,7 @@ specifying workdir:
 
 ```bash
 # ✅ CORRECT — workdir is auto-injected
-deno test --allow-all test/
+cargo test
 ```
 
 **Do NOT use `cd` in commands** — it doesn't persist and the plugin handles

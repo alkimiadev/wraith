@@ -96,14 +96,14 @@ Verify:
 - Edge cases considered
 - No brittle tests (over-mocked, timing-dependent)
 
-#### D. Static Analysis (Deno toolchain)
+#### D. Static Analysis (Rust toolchain)
 
-Run the project's type check, lint, and format commands:
+Run the project's build, lint, and format commands:
 
 ```bash
-deno check mod.ts src/graphs/mod.ts src/sqlite/mod.ts  # Type check
-deno lint                                               # Lint (slow-types excluded per project config)
-deno fmt --check                                        # Format check
+cargo build                                                   # Build check
+cargo clippy -- -D warnings                                   # Lint
+cargo fmt --check                                              # Format check
 ```
 
 #### D2. Project Convention Checks
@@ -111,12 +111,13 @@ deno fmt --check                                        # Format check
 For this project, also verify:
 
 - No comments in code (per project convention)
-- Slow types are only in known problem areas (drizzle ORM generics) — no new
-  slow types outside those
-- Imports use explicit `.ts` extensions (Deno convention)
-- TypeBox schemas are values+types (no `import type` for schema symbols)
-- Entry points are `mod.ts` files that re-export
-- Clients are injectable (no module-level side effects, no env vars)
+- Error handling uses `anyhow::Result` (application) / `thiserror` (library) — no
+  panics in library code
+- Feature flags are used correctly (`tls`, `iroh`, `acme`) — base crate compiles
+  lean
+- Public API is well-documented with `///` doc comments where appropriate
+- Module structure follows Rust conventions (`mod.rs`, `lib.rs`)
+- No unnecessary `unwrap()` or `expect()` in library code
 
 #### E. Security
 
