@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::time::SystemTime;
 
 use ipnetwork::IpNetwork;
+use russh::keys::helpers::EncodedExt;
 use russh::keys::{Certificate, PublicKey};
 
 use super::keys::{CertAuthorityEntry, KeySource, load_cert_authority_entries, load_public_keys};
@@ -13,6 +14,11 @@ use crate::error::AuthError;
 pub struct ServerAuthConfig {
     pub authorized_keys: HashSet<PublicKey>,
     pub cert_authorities: Vec<CertAuthorityEntry>,
+    encoded_keys: HashSet<Vec<u8>>,
+}
+
+fn encode_key_data(key: &PublicKey) -> Vec<u8> {
+    key.key_data().encoded().unwrap_or_default()
 }
 
 impl ServerAuthConfig {
@@ -20,10 +26,15 @@ impl ServerAuthConfig {
         authorized_keys_source: Option<KeySource>,
         cert_authority_source: Option<KeySource>,
     ) -> Result<Self, crate::error::ConfigError> {
-        let authorized_keys = match authorized_keys_source {
+        let authorized_keys: HashSet<PublicKey> = match authorized_keys_source {
             Some(src) => load_public_keys(src)?.into_iter().collect(),
             None => HashSet::new(),
         };
+
+        let encoded_keys: HashSet<Vec<u8>> = authorized_keys
+            .iter()
+            .map(encode_key_data)
+            .collect();
 
         let cert_authorities = match cert_authority_source {
             Some(src) => load_cert_authority_entries(src)?,
@@ -33,11 +44,13 @@ impl ServerAuthConfig {
         Ok(ServerAuthConfig {
             authorized_keys,
             cert_authorities,
+            encoded_keys,
         })
     }
 
     pub fn authenticate_publickey(&self, key: &PublicKey) -> Result<(), AuthError> {
-        if self.authorized_keys.contains(key) {
+        let encoded = encode_key_data(key);
+        if self.encoded_keys.contains(&encoded) {
             return Ok(());
         }
         Err(AuthError::KeyRejected)
@@ -95,13 +108,13 @@ fn check_critical_options(
 
     for (name, data) in cert.critical_options().iter() {
         match name.as_str() {
-            "no-pty" => {}
             "source-address" => {
                 if !check_source_address(data, client_ip) {
                     return Err(AuthError::CertInvalid);
                 }
             }
             "force-command" => {}
+            "no-pty" => {}
             _ => {
                 let _ = ca_has_no_pty;
                 return Err(AuthError::CertInvalid);
@@ -166,14 +179,14 @@ mod tests {
     use super::*;
     use rand_core::OsRng;
     use russh::keys::{Certificate, PrivateKey, decode_secret_key};
-    use russh::keys::certificate::{Builder, CertType};
+    use russh::keys::ssh_key::certificate::{Builder, CertType};
     use std::io::Write;
 
-    const CA_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACBOfInDyRS33JEeDNT8xd10qRdwFN8z/QukCOgEIkv01QAAAJiQ+NvMkPjb\nzAAAAAtzc2gtZWQyNTUxOQAAACBOfInDyRS33JEeDNT8xd10qRdwFN8z/QukCOgEIkv01Q\nAAAECIWwJf7+7MOuZAOOWmoQbE9i/5GxjKsFrtJHjZ34E/fk58icPJFLfckR4M1PzF3XSp\nF3AU3zP9C6QI6AQiS/TVAAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
+    const CA_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACA6pFKBI327JsRFmZULalNjpoUPJMVxzsk9bGbDByat+gAAAJjP22Bpz9tg\naQAAAAtzc2gtZWQyNTUxOQAAACA6pFKBI327JsRFmZULalNjpoUPJMVxzsk9bGbDByat+g\nAAAEBcRrWyUU+lLpjHbaaYN5YeOlvz6HnuBndUWevEmHk00jqkUoEjfbsmxEWZlQtqU2Om\nhQ8kxXHOyT1sZsMHJq36AAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
 
-    const USER_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACBIeLC1lWiCYrXsf/85O/pkbUFZ6OGIt49PX3nw8iRoXEAAAJiQ+NvMkPjb\nzAAAAAtzc2gtZWQyNTUxOQAAACBIeLC1lWiCYrXsf/85O/pkbUFZ6OGIt49PX3nw8iRoXE\nAAAECN7VPGq3dipvy5bJjpJCxbCDdJd7lf7D8sWsmCl7A2fR4sIWVaIJitex//zk7+mRtQ\nVno4Yi3j09fefDyJGhcQAAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
+    const USER_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACAoTr8X7HqltuKBdBdB2Vjb+K7bi3vVPcuWAYIb3ur5NgAAAJgM/+f3DP/n\n9wAAAAtzc2gtZWQyNTUxOQAAACAoTr8X7HqltuKBdBdB2Vjb+K7bi3vVPcuWAYIb3ur5Ng\nAAAEADN/ZEFvX/mflX8aEGwS/tMzys564rYEaMzd4vmYKZkShOvxfseqW24oF0F0HZWNv4\nrtuLe9U9y5YBghve6vk2AAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
 
-    const OTHER_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACDZ5eU7qBc8pjN0Vw2WU4fB3kY3F7UZ3WwN8y2b/KvDwAAAJiQ+NvMkPjb\nzAAAAAtzc2gtZWQyNTUxOQAAACDZ5eU7qBc8pjN0Vw2WU4fB3kY3F7UZ3WwN8y2b/KvDw\nAAAEAy8qZ3R5T2p4V1iS5OzYHjf3Hb4a5kS3+4M0QYI7kWg2fl7TuoFzymM3RXDZZTh8He\nRjcXtRndbA3zLZv8q8PAAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
+    const OTHER_PRIVATE_KEY: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACC/7V2LLT4WRm1Mfje8eSPWlhN+kNXz2ryKoqCkSrGzdgAAAJgXj2UzF49l\nMwAAAAtzc2gtZWQyNTUxOQAAACC/7V2LLT4WRm1Mfje8eSPWlhN+kNXz2ryKoqCkSrGzdg\nAAAEBVadyi5nAUfkjpp4zyQ08b8h1o4RTEgwtLejTjX5Tycb/tXYstPhZGbUx+N7x5I9aW\nE36Q1fPavIqioKRKsbN2AAAAD3VidW50dUBuczUyODA5NgECAwQFBg==\n-----END OPENSSH PRIVATE KEY-----\n";
 
     fn load_ca_key() -> PrivateKey {
         decode_secret_key(CA_PRIVATE_KEY, None).unwrap()
@@ -189,14 +202,15 @@ mod tests {
 
     fn make_cert(
         ca_key: &PrivateKey,
-        user_key: &PublicKey,
+        user_pub: &PublicKey,
         valid_after: u64,
         valid_before: u64,
         principals: Vec<&str>,
     ) -> Certificate {
+        let key_data: russh::keys::ssh_key::public::KeyData = user_pub.into();
         let mut builder = Builder::new_with_random_nonce(
             &mut OsRng,
-            user_key.key_data().clone(),
+            key_data,
             valid_after,
             valid_before,
         )
@@ -326,13 +340,24 @@ mod tests {
     }
 
     #[test]
-    fn cert_empty_principals_accepts_any_user() {
+    fn cert_wildcard_principals_accepts_any_user() {
         let ca_key = load_ca_key();
         let user_key = load_user_key();
         let ca_pub = ca_key.public_key().clone();
         let user_pub = user_key.public_key().clone();
         let now = now_secs();
-        let cert = make_cert(&ca_key, &user_pub, now - 60, now + 3600, vec![]);
+        let key_data: russh::keys::ssh_key::public::KeyData = (&user_pub).into();
+        let mut builder = Builder::new_with_random_nonce(
+            &mut OsRng,
+            key_data,
+            now - 60,
+            now + 3600,
+        )
+        .unwrap();
+        builder.cert_type(CertType::User).unwrap();
+        builder.all_principals_valid().unwrap();
+        let cert = builder.sign(&ca_key).unwrap();
+
         let f = make_ca_file(&ca_pub, &[]);
         let config =
             ServerAuthConfig::from_keys_and_ca(None, Some(KeySource::File(f.path().to_path_buf())))

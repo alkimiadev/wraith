@@ -18,7 +18,7 @@ pub enum TransportError {
     },
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AuthError {
     #[error("key rejected")]
     KeyRejected,

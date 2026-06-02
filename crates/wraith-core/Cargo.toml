@@ -9,7 +9,7 @@ name = "wraith_core"
 [features]
 default = []
 tls = ["dep:tokio-rustls", "dep:rustls", "dep:rustls-pki-types", "dep:webpki-roots"]
-iroh = ["dep:iroh"]
+iroh = ["dep:iroh", "dep:url"]
 acme = ["dep:rustls-acme", "tls"]
 testutil = []
 transport-traits = []
@@ -27,9 +27,12 @@ rustls-pki-types = { version = "1", optional = true }
 rustls-acme = { version = "0.12", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 iroh = { version = "0.34", optional = true }
+url = { version = "2", optional = true }
 async-trait = "0.1"
+ipnetwork = "0.21.1"
 
 [dev-dependencies]
 wraith-core = { path = ".", features = ["testutil", "tls"] }
 tempfile = "3"
 rcgen = "0.14"
+rand_core = "0.6"
