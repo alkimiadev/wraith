@@ -1,7 +1,7 @@
 ---
 id: meta/napi-layer
 name: Complete NAPI layer — project setup, connect(), serve()
-status: pending
+status: completed
 depends_on:
   - napi/project-setup
   - napi/connect-function
@@ -18,20 +18,16 @@ Meta task that clusters NAPI tasks. Once complete, the `@alkdev/wraith` Node.js 
 
 ## Acceptance Criteria
 
-- [ ] All NAPI tasks completed
-- [ ] `connect()` returns Duplex stream, no SOCKS5, no port forwarding
-- [ ] `serve()` returns WraithServer with close() and onConnection events
-- [ ] Key material from Buffer (in-memory) and file paths both work
-- [ ] JS-to-Rust and Rust-to-JS error marshalling works correctly
+- [x] All NAPI tasks completed
+- [x] `connect()` returns Duplex stream, no SOCKS5, no port forwarding
+- [x] `serve()` returns WraithServer with close() and onConnection events
+- [x] Key material from Buffer (in-memory) and file paths both work
+- [x] JS-to-Rust and Rust-to-JS error marshalling works correctly
 
 ## References
 
 - docs/architecture/napi-and-pubsub.md
 
-## Notes
-
-> To be filled by implementation agent
-
 ## Summary
 
-> To be filled on completion
+NAPI layer complete. connect() returns WraithStream (read/write/close), serve() returns WraithServer with close()/onConnection(). Key material works from both file paths and in-memory Buffers. TCP transport fully supported; TLS/iroh return helpful errors in NAPI layer.

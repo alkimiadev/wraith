@@ -1,7 +1,7 @@
 ---
 id: meta/cli-layer
 name: Complete CLI layer — wraith serve and wraith connect commands
-status: pending
+status: completed
 depends_on:
   - cli/serve-command
   - cli/connect-command
@@ -17,18 +17,14 @@ Meta task that clusters CLI tasks. Once complete, the `wraith` binary has both `
 
 ## Acceptance Criteria
 
-- [ ] Both CLI tasks completed
-- [ ] `wraith serve --help` and `wraith connect --help` match architecture spec flag lists
-- [ ] End-to-end: `wraith serve` + `wraith connect` establishes working SSH tunnel
+- [x] Both CLI tasks completed
+- [x] `wraith serve --help` and `wraith connect --help` match architecture spec flag lists
+- [x] End-to-end: `wraith serve` + `wraith connect` establishes working SSH tunnel
 
 ## References
 
 - docs/architecture/client.md, docs/architecture/server.md
 
-## Notes
-
-> To be filled by implementation agent
-
 ## Summary
 
-> To be filled on completion
+CLI layer complete. Both `wraith serve` and `wraith connect` subcommands implemented with all architecture spec flags.
