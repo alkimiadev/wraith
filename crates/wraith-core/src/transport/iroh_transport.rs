@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn iroh_transport_describe_format() {
-        let node_id: NodeId = iroh::SecretKey::generate(rand::rngs::OsRng)
+        let node_id: NodeId = iroh::SecretKey::generate(rand_core::OsRng)
             .public()
             .into();
         let desc = format!("iroh://{}", node_id.to_z32());
@@ -160,7 +160,7 @@ mod tests {
 
     #[tokio::test]
     async fn iroh_transport_connect_builds_endpoint() {
-        let node_id: NodeId = iroh::SecretKey::generate(rand::rngs::OsRng)
+        let node_id: NodeId = iroh::SecretKey::generate(rand_core::OsRng)
             .public()
             .into();
         let transport = IrohTransport::new(node_id, None, None).await.unwrap();

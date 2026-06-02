@@ -37,3 +37,4 @@ tempfile = "3"
 rcgen = "0.14"
 rand_core = "0.6"
 ssh-key = { version = "0.6", features = ["ed25519", "alloc"] }
+rand = "0.10.1"

@@ -222,7 +222,12 @@ impl ServerCertVerifier for NoVerifier {
 mod tests {
     use super::*;
     use rcgen::{CertificateParams, KeyPair};
+    use rustls::crypto::aws_lc_rs::default_provider;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn ensure_crypto_provider() {
+        let _ = default_provider().install_default();
+    }
 
     fn generate_self_signed_cert() -> (CertificateDer<'static>, PrivateKeyDer<'static>) {
         let params = CertificateParams::new(vec!["localhost".to_string()]).unwrap();
@@ -259,6 +264,7 @@ mod tests {
 
     #[tokio::test]
     async fn tls_connect_insecure_self_signed() {
+        ensure_crypto_provider();
         let (cert_der, key_der) = generate_self_signed_cert();
 
         let acceptor = TlsAcceptor::bind(
@@ -299,6 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn tls_acceptor_returns_server_name() {
+        ensure_crypto_provider();
         let (cert_der, key_der) = generate_self_signed_cert();
 
         let acceptor = TlsAcceptor::bind(
@@ -329,6 +336,7 @@ mod tests {
 
     #[tokio::test]
     async fn tls_full_client_to_server_connection() {
+        ensure_crypto_provider();
         let (cert_der, key_der) = generate_self_signed_cert();
 
         let acceptor = TlsAcceptor::bind(
@@ -365,6 +373,7 @@ mod tests {
 
     #[tokio::test]
     async fn tls_acceptor_bind_port_zero_assigns_ephemeral() {
+        ensure_crypto_provider();
         let (cert_der, key_der) = generate_self_signed_cert();
 
         let acceptor = TlsAcceptor::bind(
