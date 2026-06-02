@@ -60,6 +60,22 @@ pub enum ConfigError {
     IncompatibleOptions,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ForwardError {
+    #[error("invalid forward spec: {spec}")]
+    InvalidSpec { spec: String },
+    #[error("bind failed")]
+    BindFailed {
+        #[source]
+        source: io::Error,
+    },
+    #[error("channel open failed")]
+    ChannelOpenFailed {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
