@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/wraith-core",
+    "crates/wraith",
+    "crates/wraith-napi",
+]
+resolver = "2"
