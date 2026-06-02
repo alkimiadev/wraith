@@ -8,5 +8,5 @@ pub mod error;
 #[cfg(feature = "testutil")]
 pub mod testutil;
 
-pub use error::{AuthError, ChannelError, ConfigError, TransportError};
+pub use error::{AuthError, ChannelError, ConfigError, ForwardError, TransportError};
 pub use transport::{Transport, TransportAcceptor, TransportInfo, TransportKind};
