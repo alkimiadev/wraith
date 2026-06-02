@@ -11,6 +11,12 @@ use tokio_rustls::{client::TlsStream as ClientTlsStream, TlsAcceptor as TokioTls
 
 use super::{Transport, TransportAcceptor, TransportInfo, TransportKind};
 
+/// A TLS-based client transport that connects to a remote address over TLS.
+///
+/// Wraps a TCP connection with a TLS client session via `tokio_rustls::TlsConnector`.
+/// Supports insecure mode (accepts any certificate, for development) and
+/// custom root CA certificates for verification. The `tls_server_name` field
+/// overrides the SNI hostname sent during the TLS handshake (ADR-010).
 pub struct TlsTransport {
     addr: SocketAddr,
     tls_server_name: Option<String>,
@@ -93,11 +99,19 @@ impl Transport for TlsTransport {
     }
 }
 
+/// Stub configuration for ACME certificate provisioning (ADR-008).
+/// Feature-gated behind the `acme` feature. When implemented, this will
+/// hold the ACME domain and challenge responder configuration.
 #[derive(Debug)]
 pub struct AcmeConfig {
     pub domain: String,
 }
 
+/// A TLS-based server transport acceptor that accepts TCP connections
+/// and wraps them with TLS server sessions via `tokio_rustls::TlsAcceptor`.
+///
+/// Requires certificate and private key configuration. Supports manual
+/// cert/key paths and an ACME config stub (ADR-008).
 pub struct TlsAcceptor {
     listener: TcpListener,
     listen_addr: SocketAddr,
