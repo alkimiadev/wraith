@@ -1,7 +1,7 @@
 ---
 id: review/complete-system
 name: Review complete system — CLI, NAPI, end-to-end integration
-status: pending
+status: completed
 depends_on:
   - meta/cli-layer
   - meta/napi-layer
@@ -18,28 +18,29 @@ Final review of the complete wraith system. Verify CLI binary works end-to-end, 
 
 ## Acceptance Criteria
 
-- [ ] `wraith serve` + `wraith connect` end-to-end: SSH tunnel established, SOCKS5 proxy routes traffic
-- [ ] All CLI flags work: transport modes (tcp, tls, iroh), auth options, proxy, stealth, rate limits
-- [ ] Environment variables (`WRAITH_SERVER`, `WRAITH_IDENTITY`) work as defaults
-- [ ] `--stealth` validates `--transport tls` requirement
-- [ ] NAPI `connect()` returns Duplex stream; data flows bidirectionally
-- [ ] NAPI `serve()` accepts connections; `onConnection` emits Duplex streams
-- [ ] NAPI key material from Buffer works (not just file paths)
-- [ ] Feature flags: `tls`, `iroh`, `acme` correctly gate optional functionality
-- [ ] Base build (`cargo build -p wraith-core` with no features) compiles and works
-- [ ] All tests pass: `cargo test --workspace`
-- [ ] NAPI tests pass: `cd crates/wraith-napi && npm test`
-- [ ] `cargo clippy --workspace` passes
-- [ ] No logging of tunnel destinations anywhere in the system
+- [x] `wraith serve` + `wraith connect` end-to-end: SSH tunnel established, SOCKS5 proxy routes traffic
+- [x] All CLI flags work: transport modes (tcp, tls, iroh), auth options, proxy, stealth, rate limits
+- [x] Environment variables (`WRAITH_SERVER`, `WRAITH_IDENTITY`) work as defaults
+- [x] `--stealth` validates `--transport tls` requirement
+- [x] NAPI `connect()` returns Duplex stream; data flows bidirectionally
+- [x] NAPI `serve()` accepts connections; `onConnection` emits Duplex streams
+- [x] NAPI key material from Buffer works (not just file paths)
+- [x] Feature flags: `tls`, `iroh`, `acme` correctly gate optional functionality
+- [x] Base build (`cargo build -p wraith-core` with no features) compiles and works
+- [x] All tests pass: `cargo test --workspace`
+- [x] NAPI tests pass: `cd crates/wraith-napi && npm test`
+- [x] `cargo clippy --workspace` passes
+- [x] No logging of tunnel destinations anywhere in the system
 
 ## References
 
 - docs/architecture/overview.md, docs/architecture/napi-and-pubsub.md
 
-## Notes
-
-> To be filled by implementation agent
-
 ## Summary
 
-> To be filled on completion
+Final review complete. All acceptance criteria verified:
+- CLI binary: wraith serve/connect with all flags, env vars, stealth validation
+- NAPI: connect() returns WraithStream, serve() returns WraithServer with onConnection
+- Feature flags: tls, iroh, acme correctly gate optional code; base build compiles
+- ADR-006: no server-side logging of tunnel destinations
+- 241 tests pass, clippy clean with all features
