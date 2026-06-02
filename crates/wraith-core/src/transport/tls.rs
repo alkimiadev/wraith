@@ -9,7 +9,15 @@ use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, ServerConfig};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{client::TlsStream as ClientTlsStream, TlsAcceptor as TokioTlsAcceptor, TlsConnector};
 
+#[cfg(feature = "acme")]
+use rustls::crypto::aws_lc_rs::default_provider;
+#[cfg(feature = "acme")]
+use rustls_acme::ResolvesServerCertAcme;
+
 use super::{Transport, TransportAcceptor, TransportInfo, TransportKind};
+
+#[cfg(feature = "acme")]
+const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 /// A TLS-based client transport that connects to a remote address over TLS.
 ///
@@ -110,8 +118,10 @@ pub struct AcmeConfig {
 /// A TLS-based server transport acceptor that accepts TCP connections
 /// and wraps them with TLS server sessions via `tokio_rustls::TlsAcceptor`.
 ///
-/// Requires certificate and private key configuration. Supports manual
-/// cert/key paths and an ACME config stub (ADR-008).
+/// Supports three certificate modes (ADR-008):
+/// - Manual certs via `bind()` with explicit cert/key
+/// - ACME certs via `bind_acme()` with an `AcmeCertProvider`
+/// - The stub `AcmeConfig` parameter in `bind()` is kept for backward compat
 pub struct TlsAcceptor {
     listener: TcpListener,
     listen_addr: SocketAddr,
@@ -133,6 +143,33 @@ impl TlsAcceptor {
         let server_config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(tls_certs, tls_key)?;
+
+        let server_config = Arc::new(server_config);
+        let tokio_acceptor = TokioTlsAcceptor::from(server_config.clone());
+
+        Ok(Self {
+            listener,
+            listen_addr,
+            server_config,
+            tokio_acceptor,
+        })
+    }
+
+    #[cfg(feature = "acme")]
+    pub async fn bind_acme(
+        addr: SocketAddr,
+        acme_resolver: Arc<ResolvesServerCertAcme>,
+    ) -> Result<Self> {
+        let listener = TcpListener::bind(addr).await?;
+        let listen_addr = listener.local_addr()?;
+
+        let provider = default_provider().into();
+        let mut server_config = ServerConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|e| anyhow!("failed to set protocol versions: {}", e))?
+            .with_no_client_auth()
+            .with_cert_resolver(acme_resolver);
+        server_config.alpn_protocols.push(ACME_TLS_ALPN_NAME.to_vec());
 
         let server_config = Arc::new(server_config);
         let tokio_acceptor = TokioTlsAcceptor::from(server_config.clone());

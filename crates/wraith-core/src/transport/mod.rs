@@ -12,6 +12,12 @@ mod tls;
 #[cfg(feature = "tls")]
 pub use tls::{AcmeConfig, TlsAcceptor, TlsTransport};
 
+#[cfg(feature = "acme")]
+mod acme;
+
+#[cfg(feature = "acme")]
+pub use acme::{AcmeCertProvider, AcmeMode, AcmeTlsAcceptor};
+
 use std::net::SocketAddr;
 
 use anyhow::Result;
