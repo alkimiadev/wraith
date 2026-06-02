@@ -24,6 +24,7 @@ pub struct ProxyConfig {
 
 pub struct ServerHandler {
     auth_config: Arc<ServerAuthConfig>,
+    #[allow(dead_code)]
     outbound_proxy: Option<ProxyConfig>,
     remote_addr: Option<SocketAddr>,
 }
@@ -101,22 +102,7 @@ impl Handler for ServerHandler {
             return Ok(true);
         }
 
-        let proxy_info = self
-            .outbound_proxy
-            .as_ref()
-            .map(|p| format!("{:?}", p.mode))
-            .unwrap_or_else(|| "direct".to_string());
-
-        tracing::info!(
-            host = host_to_connect,
-            port = port_to_connect,
-            originator_address = originator_address,
-            originator_port = originator_port,
-            proxy = %proxy_info,
-            "spawning tcp proxy task"
-        );
-
-        let _ = channel;
+        let _ = (host_to_connect, port_to_connect, originator_address, originator_port, channel);
         Ok(false)
     }
 
