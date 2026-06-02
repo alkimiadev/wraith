@@ -4,3 +4,8 @@ pub mod server;
 pub mod auth;
 pub mod socks5;
 pub mod error;
+
+#[cfg(feature = "testutil")]
+pub mod testutil;
+
+pub use error::{AuthError, ChannelError, ConfigError, TransportError};
