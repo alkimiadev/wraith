@@ -74,6 +74,11 @@ pub enum ForwardError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+    #[error("connect to local target failed")]
+    LocalConnectFailed {
+        #[source]
+        source: io::Error,
+    },
 }
 
 #[cfg(test)]
