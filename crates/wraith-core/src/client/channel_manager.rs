@@ -1,3 +1,11 @@
+//! Channel manager with automatic reconnection.
+//!
+//! Owns the SSH session handle and provides `open_direct_tcpip()`,
+//! `request_tcpip_forward()`, and `cancel_tcpip_forward()`. Monitors
+//! the session for disconnect and attempts reconnection with exponential
+//! backoff (1s, 2s, 4s, ..., 30s cap). Re-registers remote forwards
+//! after successful reconnection.
+
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;

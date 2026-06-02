@@ -1,3 +1,9 @@
+//! Control channel routing for reserved `wraith-*` destinations.
+//!
+//! SSH channels opened with a destination starting with `wraith-` are intercepted
+//! by the server and routed to a `ControlChannelHandler` instead of proxied to a
+//! TCP target. See ADR-018 for the design rationale.
+
 use std::io;
 
 use async_trait::async_trait;

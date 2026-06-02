@@ -1,3 +1,10 @@
+//! Local and remote port forwarding.
+//!
+//! `LocalForwarder` binds a local TCP listener and forwards each connection through
+//! an SSH `direct-tcpip` channel. `RemoteForwarder` requests `tcpip-forward` from
+//! the server and handles `forwarded-tcpip` channels. Specs follow the
+//! `bind_addr:bind_port:target_host:target_port` format.
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 

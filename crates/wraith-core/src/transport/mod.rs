@@ -1,3 +1,18 @@
+//! Pluggable transport layer for Wraith.
+//!
+//! The transport layer produces a duplex byte stream (`AsyncRead + AsyncWrite + Unpin + Send`)
+//! that SSH consumes. This is the core architectural abstraction — SSH never opens its own
+//! network connections; it runs entirely over whatever stream the transport provides.
+//!
+//! Available transports (feature-gated):
+//! - `TcpTransport` / `TcpAcceptor` — always available, direct TCP
+//! - `TlsTransport` / `TlsAcceptor` — behind the `tls` feature, TCP + rustls
+//! - `IrohTransport` / `IrohAcceptor` — behind the `iroh` feature, QUIC P2P via iroh
+//! - `AcmeTlsAcceptor` — behind the `acme` feature, auto-provision TLS certs via Let's Encrypt
+//!
+//! See [ADR-001](docs/architecture/decisions/001-pluggable-transport.md) and
+//! [ADR-004](docs/architecture/decisions/004-ssh-over-transport.md) for design rationale.
+
 mod tcp;
 #[cfg(feature = "iroh")]
 mod iroh_transport;
@@ -24,19 +39,33 @@ use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 
+/// Client-side transport trait. Produces a single duplex stream per connection.
+///
+/// Implementations connect to a remote endpoint and return a stream that SSH
+/// runs over via `russh::client::connect_stream()`. Each call to `connect()` creates
+/// a new stream — multiple sessions need multiple calls or multiple transports.
 #[async_trait]
 pub trait Transport: Send + Sync + 'static {
+    /// The duplex stream type produced by this transport.
     type Stream: AsyncRead + AsyncWrite + Unpin + Send + 'static;
 
+    /// Connect to the remote endpoint and return a duplex stream.
     async fn connect(&self) -> Result<Self::Stream>;
 
+    /// Return a human-readable description of this transport for logging.
     fn describe(&self) -> String;
 }
 
+/// Server-side transport acceptor. Accepts incoming connections and returns streams.
+///
+/// Implementations bind to a local endpoint and produce streams that SSH
+/// runs over via `russh::server::run_stream()`.
 #[async_trait]
 pub trait TransportAcceptor: Send + Sync + 'static {
+    /// The duplex stream type produced by this acceptor.
     type Stream: AsyncRead + AsyncWrite + Unpin + Send + 'static;
 
+    /// Accept an incoming connection and return a duplex stream with metadata.
     async fn accept(&self) -> Result<(Self::Stream, TransportInfo)>;
 }
 

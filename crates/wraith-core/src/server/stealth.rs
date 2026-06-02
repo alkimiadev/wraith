@@ -1,3 +1,11 @@
+//! Stealth mode: protocol detection on TLS connections.
+//!
+//! When stealth mode is enabled with TLS transport, the server peeks at the first
+//! bytes after the TLS handshake to determine whether the client is speaking SSH
+//! or HTTP. Non-SSH connections receive a fake nginx 404 response, making the
+//! server appear as an ordinary web server to port scanners and DPI systems.
+//! See ADR-017.
+
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 
 const SSH_BANNER_PREFIX: &[u8] = b"SSH-2.0-";

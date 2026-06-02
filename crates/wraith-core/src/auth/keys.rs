@@ -1,15 +1,29 @@
+//! Key loading and parsing for SSH authentication.
+//!
+//! Supports `KeySource` (file path or in-memory) for private keys, public keys,
+//! and certificate authority entries. All keys must be in OpenSSH format.
+//! PEM-encoded keys (PKCS#1, PKCS#8) are rejected with a clear error message.
+
 use std::path::PathBuf;
 
 use russh::keys::{PrivateKey, PublicKey, decode_secret_key, parse_public_key_base64};
 
 use crate::error::ConfigError;
 
+/// Source for key material — either a filesystem path or in-memory bytes.
+///
+/// Used throughout the API to accept keys without committing to a specific
+/// loading mechanism. In-memory keys are primarily for the NAPI wrapper.
 #[derive(Debug, Clone)]
 pub enum KeySource {
     File(PathBuf),
     Memory(Vec<u8>),
 }
 
+/// A certificate authority entry parsed from an `authorized_keys` file.
+///
+/// Contains the CA public key and its associated options (e.g., `cert-authority`,
+/// `permit-port-forwarding`). Used by `ServerAuthConfig` for certificate validation.
 #[derive(Debug, Clone)]
 pub struct CertAuthorityEntry {
     pub public_key: PublicKey,

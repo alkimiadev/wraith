@@ -1,3 +1,9 @@
+//! Server configuration and accept loop.
+//!
+//! `Server` binds to a transport acceptor and runs an accept loop, handling
+//! authentication, stealth mode protocol detection, and graceful shutdown.
+//! `ServeOptions` provides a builder-pattern API for programmatic configuration.
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,6 +22,7 @@ use crate::server::stealth::{self, ProtocolDetection};
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:22";
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Transport mode for the server listener.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServeTransportMode {
     Tcp,
@@ -33,6 +40,22 @@ impl std::fmt::Display for ServeTransportMode {
     }
 }
 
+/// Programmatic configuration for a wraith server.
+///
+/// Construct with `ServeOptions::new(key_source)` and chain builder methods.
+/// Call `validate()` before passing to `Server::new()`.
+///
+/// ```
+/// use wraith_core::server::{ServeOptions, ServeTransportMode};
+/// use wraith_core::auth::keys::KeySource;
+///
+/// let opts = ServeOptions::new(KeySource::File("/path/to/host_key".into()))
+///     .transport_mode(ServeTransportMode::Tcp)
+///     .listen_addr("0.0.0.0:22")
+///     .max_connections_per_ip(5)
+///     .max_auth_attempts(3);
+/// opts.validate().unwrap();
+/// ```
 pub struct ServeOptions {
     pub key: KeySource,
     pub authorized_keys: Option<KeySource>,
@@ -180,6 +203,7 @@ impl std::fmt::Debug for ServeOptions {
     }
 }
 
+/// Errors that can occur during server setup and operation.
 #[derive(Debug, thiserror::Error)]
 pub enum ServeError {
     #[error("config error: {0}")]
@@ -197,6 +221,11 @@ struct ActiveSession {
     join: tokio::task::JoinHandle<()>,
 }
 
+/// The wraith SSH server.
+///
+/// Accepts connections over any `TransportAcceptor`, authenticates via Ed25519 keys
+/// or certificate authority, and proxies `direct-tcpip` channels to their targets.
+/// Supports stealth mode (TLS only), outbound proxy routing, and connection rate limiting.
 pub struct Server {
     config: Arc<server::Config>,
     auth_config: Arc<ServerAuthConfig>,

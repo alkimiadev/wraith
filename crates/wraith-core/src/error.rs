@@ -1,3 +1,12 @@
+//! Error types for wraith-core.
+//!
+//! Layered error hierarchy:
+//! - `TransportError` — connection/handshake/timeout errors (trigger reconnection on client)
+//! - `AuthError` — key rejection, certificate validation failures
+//! - `ChannelError` — per-channel failures (target unreachable, channel closed)
+//! - `ConfigError` — invalid configuration (flags, key files, bind failures)
+//! - `ForwardError` — port forward setup and connection failures
+
 use std::io;
 
 #[derive(Debug, thiserror::Error)]

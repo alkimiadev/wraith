@@ -1,3 +1,9 @@
+//! Outbound connection proxy for SSH channel targets.
+//!
+//! Connects to the requested `host:port` either directly, via SOCKS5 proxy, or
+//! via HTTP CONNECT proxy, then proxies bytes bidirectionally between the SSH
+//! channel and the outbound TCP stream.
+
 use std::net::SocketAddr;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

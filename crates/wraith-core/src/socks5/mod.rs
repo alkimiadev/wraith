@@ -1,3 +1,10 @@
+//! SOCKS5 proxy server.
+//!
+//! Listens on a local port and routes each SOCKS5 connection through an SSH
+//! `direct-tcpip` channel. Supports SOCKS5h (domain names resolved server-side)
+//! to prevent DNS leaks. Uses the `ChannelOpener` trait to abstract over the
+//! SSH channel mechanism, making it testable without a real SSH session.
+
 mod protocol;
 
 use std::net::SocketAddr;

@@ -1,3 +1,10 @@
+//! Connection rate limiting and auth attempt limiting.
+//!
+//! `ConnectionRateLimiter` tracks per-IP active connections (thread-safe).
+//! `AuthAttemptLimiter` caps failed auth attempts per connection.
+//! These complement fail2ban on Linux and provide abuse protection on all platforms.
+//! See ADR-013.
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;

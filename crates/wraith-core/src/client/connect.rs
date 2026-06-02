@@ -1,3 +1,9 @@
+//! Client session management and connection logic.
+//!
+//! `ClientSession` establishes an SSH connection over a transport, authenticates,
+//! starts a SOCKS5 proxy, sets up port forwards, and monitors for reconnection.
+//! `ConnectOptions` provides a builder-pattern API for programmatic configuration.
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +23,7 @@ use crate::transport::Transport;
 const DEFAULT_SOCKS5_ADDR: &str = "127.0.0.1:1080";
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Transport mode for the client connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportMode {
     Tcp,
@@ -34,6 +41,22 @@ impl std::fmt::Display for TransportMode {
     }
 }
 
+/// Programmatic configuration for a wraith client session.
+///
+/// Construct with `ConnectOptions::new(key_source)` and chain builder methods.
+/// Call `validate()` before passing to `ClientSession::new()`.
+///
+/// ```
+/// use wraith_core::client::{ConnectOptions, TransportMode};
+/// use wraith_core::auth::keys::KeySource;
+///
+/// let opts = ConnectOptions::new(KeySource::File("/path/to/key".into()))
+///     .server("example.com:22")
+///     .transport_mode(TransportMode::Tcp)
+///     .socks5_addr("127.0.0.1:1080")
+///     .forward("5432:db.internal:5432");
+/// opts.validate().unwrap();
+/// ```
 #[derive(Clone)]
 pub struct ConnectOptions {
     pub server: Option<String>,
@@ -155,6 +178,11 @@ impl std::fmt::Debug for ConnectOptions {
     }
 }
 
+/// An active SSH client session over a transport.
+///
+/// Establishes the connection, authenticates, and runs a SOCKS5 proxy plus
+/// port forwards until shutdown or transport failure. On transport failure,
+/// attempts reconnection with exponential backoff (1s, 2s, 4s, ..., 30s cap).
 pub struct ClientSession<T: Transport> {
     opts: ConnectOptions,
     transport: Arc<T>,
@@ -489,6 +517,7 @@ fn build_remote_specs(opts: &ConnectOptions) -> Result<Vec<PortForwardSpec>, Con
     Ok(specs)
 }
 
+/// Errors that can occur during client connection setup and operation.
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectError {
     #[error("connection failed")]

@@ -1,7 +1,10 @@
 [package]
 name = "wraith-core"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core library for Wraith: pluggable SSH tunnel transport, SOCKS5 proxy, port forwarding, and authentication"
+repository.workspace = true
 
 [lib]
 name = "wraith_core"

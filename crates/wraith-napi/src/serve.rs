@@ -1,3 +1,9 @@
+//! NAPI `serve()` function and `WraithServer` type.
+//!
+//! Starts a TCP-based SSH server that emits new channel streams via a
+//! `ThreadsafeFunction` callback. Currently supports TCP transport only;
+//! TLS and iroh will be added in a future release.
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 

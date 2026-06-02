@@ -1,3 +1,9 @@
+//! Server-side authentication configuration and validation.
+//!
+//! `ServerAuthConfig` holds the set of authorized public keys and optional certificate
+//! authority entries. Authentication is key-based only (Ed25519 + optional OpenSSH CA).
+//! No password authentication. See ADR-012.
+
 use std::collections::HashSet;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -10,6 +16,10 @@ use russh::keys::{Certificate, PublicKey};
 use super::keys::{CertAuthorityEntry, KeySource, load_cert_authority_entries, load_public_keys};
 use crate::error::AuthError;
 
+/// Server-side authentication configuration.
+///
+/// Holds authorized public keys (constant-time comparison) and optional certificate
+/// authority entries for validating OpenSSH certificates.
 #[derive(Debug, Clone)]
 pub struct ServerAuthConfig {
     pub authorized_keys: HashSet<PublicKey>,

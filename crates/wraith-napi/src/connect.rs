@@ -1,3 +1,9 @@
+//! NAPI `connect()` function and `WraithStream` type.
+//!
+//! Opens a single SSH channel as a duplex stream for programmatic use.
+//! Unlike the CLI client, this does not start a SOCKS5 server or port forwards —
+//! it provides a raw stream that JavaScript code can read from and write to.
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 

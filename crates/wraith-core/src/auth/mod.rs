@@ -1,3 +1,8 @@
+//! SSH authentication (Ed25519 public key and OpenSSH certificate authority).
+//!
+//! Supports file-path and in-memory key sources. No password authentication.
+//! See ADR-012 for the design rationale.
+
 pub mod client_auth;
 pub mod keys;
 pub mod server_auth;

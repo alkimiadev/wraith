@@ -1,3 +1,11 @@
+//! # wraith
+//!
+//! CLI binary for [Wraith](https://github.com/alkdev/wraith), a self-hostable SSH-based tunnel
+//! tool. Provides `wraith connect` (client) and `wraith serve` (server) subcommands with
+//! pluggable transports (TCP, TLS, iroh).
+//!
+//! > **Alpha software.** See `wraith-core` for library usage.
+
 use std::net::SocketAddr;
 use std::process;
 use std::sync::Arc;
