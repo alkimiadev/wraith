@@ -1,24 +1,24 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # Wraith Architecture
 
 ## Current State
 
-Pre-implementation. Feasibility assessment complete. Architecture specification drafted — all open questions resolved, pending review.
+Architecture specification reviewed and ready for implementation. All open questions resolved. 19 ADRs accepted.
 
 ## Architecture Documents
 
 | Document | Status | Description |
 |----------|--------|-------------|
-| [overview.md](overview.md) | draft | Package purpose, exports, dependencies |
-| [transport.md](transport.md) | draft | Transport abstraction: TCP, TLS, iroh |
-| [client.md](client.md) | draft | Client connection, SOCKS5, port forwarding |
-| [server.md](server.md) | draft | Server acceptance, channel handling, proxy |
+| [overview.md](overview.md) | reviewed | Package purpose, exports, dependencies |
+| [transport.md](transport.md) | reviewed | Transport abstraction: TCP, TLS, iroh |
+| [client.md](client.md) | reviewed | Client connection, SOCKS5, port forwarding |
+| [server.md](server.md) | reviewed | Server acceptance, channel handling, proxy |
 | [tun-shim.md](tun-shim.md) | deprecated | TUN interface wrapper — **deferred**, use tun2proxy |
-| [napi-and-pubsub.md](napi-and-pubsub.md) | draft | NAPI wrapper and pubsub event target adapter |
+| [napi-and-pubsub.md](napi-and-pubsub.md) | reviewed | NAPI wrapper and pubsub event target adapter |
 
 ## ADR Table
 
@@ -42,6 +42,7 @@ Pre-implementation. Feasibility assessment complete. Architecture specification 
 | [016](decisions/016-napi-expose-connect-and-serve.md) | NAPI exposes both connect() and serve() | Accepted |
 | [017](decisions/017-stealth-mode-protocol-multiplexing.md) | Stealth mode — protocol multiplexing on port 443 | Accepted |
 | [018](decisions/018-control-channel-for-pubsub.md) | Control channel for pubsub over SSH | Accepted |
+| [019](decisions/019-proxy-dual-semantics.md) | `--proxy` dual semantics (client vs server) | Accepted |
 
 ## Open Questions
 

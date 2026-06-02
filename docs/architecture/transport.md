@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # Transport Layer
@@ -61,7 +61,7 @@ pub struct TransportInfo {
 pub enum TransportKind {
     Tcp,
     Tls { server_name: Option<String> },
-    Iroh { peer_id: String },
+    Iroh { endpoint_id: String },
 }
 ```
 
@@ -75,12 +75,7 @@ pub enum TransportKind {
 
 ### Iroh Stream Join
 
-Since QUIC splits streams into separate `RecvStream` and `SendStream`, while russh expects a single duplex stream, we combine them:
-
-```rust
-// One line. This works because RecvStream: AsyncRead and SendStream: AsyncWrite.
-let stream = tokio::io::join(recv_stream, send_stream);
-```
+Since QUIC splits streams into separate `RecvStream` (implements `AsyncRead`) and `SendStream` (implements `AsyncWrite`), while russh expects a single duplex stream, they are combined using `tokio::io::join(recv_stream, send_stream)` which produces a `Join<RecvStream, SendStream>` implementing both traits.
 
 See ADR-003 for the decision to use `tokio::io::join` over a custom wrapper.
 
@@ -100,13 +95,13 @@ Transports can be nested. The CLI supports `--transport iroh --proxy socks5://..
 wraith connect --transport iroh --proxy socks5://127.0.0.1:1080
 ```
 
-This routes iroh's outbound TCP connections through the specified SOCKS5 proxy. iroh's `Endpoint::builder` accepts proxy configuration directly, so the implementation is minimal — parse the proxy URL and pass it to the endpoint builder.
+This routes iroh's outbound TCP connections through the specified SOCKS5 proxy. The iroh transport supports SOCKS5 and HTTP proxy configuration for its outbound connections — the proxy URL is applied during transport initialization.
 
 For other combinations:
 - TCP + TLS is already implicit (TLS wraps TCP in `TlsTransport`)
 - TLS + SOCKS5 proxy is also supported via `--proxy` with `--transport tls`
 
-**Note**: `--proxy` has different semantics on the client vs the server:
+**Note**: `--proxy` has different semantics on the client vs the server (ADR-019):
 - **Client**: `--proxy` routes the *transport connection* through the proxy (e.g., iroh endpoint → SOCKS5 → iroh relay)
 - **Server**: `--proxy` routes *outbound target connections* through the proxy (e.g., SSH channel request → SOCKS5 → target host)
 
@@ -154,3 +149,4 @@ None — all resolved.
 | [008](decisions/008-acme-lets-encrypt.md) | ACME/Let's Encrypt | Auto-provision TLS certs, domain and IP paths |
 | [009](decisions/009-default-iroh-relay.md) | Default iroh relay | n0 relay by default, `--iroh-relay` override |
 | [010](decisions/010-transport-chaining-cli.md) | Transport chaining | `--proxy` works with all transports natively |
+| [019](decisions/019-proxy-dual-semantics.md) | Proxy dual semantics | `--proxy` routes transport on client, data on server |

@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # Server
@@ -67,6 +67,10 @@ This enables multi-user deployments where adding one CA line to `authorized_keys
 
 **No password authentication over SSH.** Keys and certificates are sufficient and more secure. If a local SOCKS5 proxy needs its own auth layer, that's a separate concern.
 
+### Key Material Format
+
+Key inputs (`--key`, `--authorized-keys`, `--cert-authority`) accept either file paths or in-memory data (via library API or NAPI wrapper). The accepted format is **OpenSSH key format** throughout — private keys in OpenSSH format (`-----BEGIN OPENSSH PRIVATE KEY-----`), public keys in OpenSSH format (`ssh-ed25519 AAAA... user@host`), and authorized keys files in standard OpenSSH `authorized_keys` format. PEM-encoded keys (PKCS#1, PKCS#8) are not supported.
+
 ### TLS Certificate Provisioning
 
 The server supports three TLS certificate modes (ADR-008):
@@ -80,6 +84,10 @@ ACME support is feature-gated behind the `acme` feature flag to keep the base bi
 ### Channel Handling
 
 When a client opens a `channel_open_direct_tcpip(host, port, originator_addr, originator_port)`:
+
+**Reserved destination** — If `host` starts with `wraith-` (e.g., `wraith-control`), the server routes the channel internally instead of connecting to a TCP target. The primary reserved destination is `wraith-control:0`, which bridges the channel to the local pubsub event bus (ADR-018).
+
+**Regular destination** — For all other targets:
 
 1. **Connection** — connect to `host:port`, either directly or via the configured outbound proxy
 2. **Outbound connection** — connect to the target, either directly or via the configured outbound proxy
@@ -107,49 +115,23 @@ When `--stealth` is enabled on the server alongside TLS transport:
 
 This makes the server appear as an ordinary web server to port scanners and DPI systems.
 
-### Server Handler (russh)
+**Stealth mode requires TLS transport (`--transport tls`).** It has no effect with TCP or iroh transports — in those cases, there is no TLS handshake to peek behind, and protocol multiplexing is impossible. The CLI should reject or warn if `--stealth` is used without `--transport tls`.
 
-```rust
-struct WraithServerHandler {
-    authorized_keys: HashSet<PublicKey>,
-    cert_authorities: Vec<PublicKey>,
-    proxy_config: Option<ProxyConfig>,
-}
+### Server Handler Behavior
 
-impl server::Handler for WraithServerHandler {
-    type Error = anyhow::Error;
+The server handler implements `russh::server::Handler` with two primary responsibilities:
 
-    async fn auth_publickey(&mut self, user: &str, key: &PublicKey) -> Auth {
-        // Check direct key match
-        if self.authorized_keys.contains(key) {
-            return Auth::Accept;
-        }
-        // Check certificate authority validation
-        if let Some(cert) = key.as_certificate() {
-            for ca in &self.cert_authorities {
-                if cert.verify(ca) && cert.is_valid() {
-                    return Auth::Accept;
-                }
-            }
-        }
-        Auth::Reject { proceed_with_methods: None, partial_success: false }
-    }
+**Authentication (`auth_publickey`)**:
+- Check the presented key against the configured `authorized_keys` set (constant-time comparison)
+- If no direct match, check whether the key is a certificate signed by a trusted cert-authority
+- Validate certificate signature, expiry, and principal restrictions (e.g., `permit-port-forwarding`, `no-pty`, `source-address`)
+- Return `Accept` or `Reject`
 
-    async fn channel_open_direct_tcpip(
-        &mut self,
-        channel: Channel<server::Msg>,
-        host: &str,
-        port: u32,
-        originator_addr: &str,
-        originator_port: u32,
-        session: &mut server::Session,
-    ) -> Result<Channel<server::Msg>, Self::Error> {
-        // Connect to host:port (directly or via proxy)
-        // Spawn bidirectional proxy task
-        Ok(channel)
-    }
-}
-```
+**Channel handling (`channel_open_direct_tcpip`)**:
+- If the destination host starts with `wraith-`, route internally (control channel, ADR-018)
+- Otherwise, connect to `host:port` (directly or via the configured outbound proxy)
+- Spawn a bidirectional proxy task between the SSH channel and the outbound TCP stream
+- Return the channel for data flow
 
 ### Logging and Rate Limiting
 
@@ -236,20 +218,43 @@ wraith serve \
 
 When running with `--transport iroh`, the server:
 
-1. Creates an `iroh::Endpoint` with ALPN value `b"wraith-ssh"`
-2. Prints its `EndpointId` (Ed25519 public key) — this is what clients use to connect
-3. Uses `iroh::protocol::Router` to accept incoming connections
-4. For each connection, accepts a `open_bi()` stream and passes it to `server::run_stream()`
+1. Creates an iroh endpoint with ALPN value `b"wraith-ssh"`
+2. Prints its endpoint ID (base58-encoded Ed25519 public key) — this is what clients use as the `--peer` value
+3. Accepts incoming connections on the endpoint
+4. For each connection, accepts a bidirectional stream and passes it to `server::run_stream()`
 
-No listening port is needed. The server connects outbound to the iroh relay (default: n0, override with `--iroh-relay`) and awaits connections from clients who know its `EndpointId`.
+No listening port is needed. The server connects outbound to the iroh relay (default: n0, override with `--iroh-relay`) and awaits connections from clients who know its endpoint ID (base58-encoded, printed on startup).
 
 ## Constraints
 
 - The server does not log tunnel destinations (ADR-006). Auth events and connection events are logged for fail2ban integration (ADR-013).
+- Destination strings beginning with `wraith-` are reserved for internal use (ADR-018). The server must not attempt TCP connections to `wraith-*` destinations — these are intercepted for control channel routing.
 - One `ServerHandler` instance per connection. Handler state is not shared between connections (unless explicitly configured via `Arc` shared state for things like connection limits).
 - The server binds to a single transport at a time. Running multiple transports (e.g., TCP + iroh) simultaneously requires separate processes or a future multiplexing feature.
 - ACME support requires the `acme` feature flag. Without it, only manual TLS certs are supported.
 - No password authentication over SSH channels. Key-based and cert-authority only (ADR-012).
+- Stealth mode (`--stealth`) requires TLS transport. It has no effect on TCP or iroh transports (ADR-017).
+
+## Graceful Shutdown
+
+On SIGTERM or SIGINT:
+
+1. Stop accepting new connections on the transport listener
+2. Send SSH disconnect messages to all active sessions
+3. Wait for in-flight channel data to drain (brief timeout, ~2 seconds per session)
+4. Close all transport listeners
+5. Exit
+
+The server does not wait indefinitely for idle connections to close. After the drain timeout, remaining connections are forcibly terminated. This prevents a slow or stuck client from blocking shutdown indefinitely.
+
+## Error Handling
+
+Error handling follows the project's layered pattern (see overview.md):
+
+- **Transport errors**: Cause connection rejection. The listener remains active — a failed TLS handshake or iroh connection attempt does not affect other incoming connections.
+- **Auth errors**: Result in connection rejection with a logged auth failure event (for fail2ban, ADR-013). Repeated failures from one connection trigger disconnect after `--max-auth-attempts`.
+- **Channel-level errors**: Individual channel failures (target unreachable, proxy failure) close that channel without affecting the SSH session or other channels. The client receives a channel open failure message.
+- **CLI errors**: Reported to stderr with a non-zero exit code. Fatal errors (invalid flags, key file not found, bind failure) exit immediately.
 
 ## Open Questions
 
@@ -267,3 +272,4 @@ None — all resolved.
 | [013](decisions/013-fail2ban-friendly-logging.md) | Fail2ban-friendly logging | Structured auth logs + built-in rate limiting |
 | [017](decisions/017-stealth-mode-protocol-multiplexing.md) | Stealth mode | Protocol multiplexing on port 443 |
 | [018](decisions/018-control-channel-for-pubsub.md) | Control channel | Reserved `wraith-control` destination for pubsub |
+| [019](decisions/019-proxy-dual-semantics.md) | Proxy dual semantics | `--proxy` routes transport on client, data on server |

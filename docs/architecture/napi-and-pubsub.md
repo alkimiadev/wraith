@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # NAPI Wrapper & PubSub Event Target
@@ -31,7 +31,7 @@ interface WraithConnectOptions {
   // TCP/TLS mode
   server?: string;           // e.g., "example.com:443"
   // iroh mode
-  peer?: string;             // iroh EndpointId (hex)
+  peer?: string;             // iroh endpoint ID (base58-encoded)
   // Transport
   transport: 'tcp' | 'tls' | 'iroh';
   // Auth
@@ -76,9 +76,20 @@ interface WraithServer {
 
 The NAPI layer is **transport-agnostic** — it doesn't know about pubsub's `EventEnvelope`. The pubsub adapter wraps the `Duplex` stream to implement `TypedEventTarget`. This separation ensures the NAPI wrapper is reusable for any stream-based protocol, not tied specifically to pubsub.
 
+### NAPI `connect()` vs CLI `wraith connect`
+
+The NAPI `connect()` function and the CLI `wraith connect` command are fundamentally different operations despite sharing the same name:
+
+- **CLI `wraith connect`**: Starts a full SSH client session with a local SOCKS5 server and optional port forwards. It manages multiple SSH channels over a single session — the user routes traffic through it via SOCKS5 or forwarded ports.
+- **NAPI `connect()`**: Opens a single SSH channel and returns it as a `Duplex` stream. No SOCKS5 server, no port forwarding. The caller reads and writes bytes directly. This is designed for the pubsub/programmatic use case where a single bidirectional byte stream is needed.
+
+For SOCKS5 proxy functionality, use the CLI binary (`wraith connect`). The NAPI wrapper is for programmatic consumers that need a raw stream.
+
 ### Programmatic Configuration (ADR-011)
 
 Both `connect()` and `serve()` accept options as plain objects. No file paths are mandatory — keys can be provided as `Buffer` data directly, making programmatic usage straightforward. Environment variables (`WRAITH_SERVER`, `WRAITH_IDENTITY`) provide convenience defaults.
+
+Key material provided as `Buffer` must be in **OpenSSH key format** (the format used by `ssh-keygen`). Private keys: OpenSSH format (`-----BEGIN OPENSSH PRIVATE KEY-----`). Public keys: OpenSSH format (`ssh-ed25519 AAAA...`). PEM-encoded keys (PKCS#1, PKCS#8) are not supported.
 
 ### PubSub Event Target Adapter
 
@@ -112,13 +123,11 @@ Wire protocol (same as other pubsub adapters):
 
 The wraith server uses a reserved `direct_tcpip` destination (`wraith-control:0`) for the pubsub control channel (ADR-018). When a client connects to this destination:
 
-1. The server's `channel_open_direct_tcpip` handler detects the reserved `wraith-control` target
-
-When a client connects to this destination:
+1. The server's `channel_open_direct_ip` handler detects the reserved `wraith-control` target
 2. Instead of opening a TCP connection, it bridges the channel to its local pubsub event bus
 3. `EventEnvelope` JSON flows bidirectionally over the SSH channel
 
-Alternatively, the server can listen on a specific port (e.g., `9736`) for the hub's WebSocket server, and wraith simply port-forwards that port.
+Users who prefer not to use the control channel can alternatively run a pubsub hub on a specific port and use standard port forwarding: `wraith connect --forward 9736:hub:9736`. This is a deployment choice, not a separate implementation — wraith's port forwarding works normally for any TCP service.
 
 ### Direction Agnostic
 

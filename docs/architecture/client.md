@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # Client
@@ -55,7 +55,7 @@ The primary client interface. Listens on a local port (default `127.0.0.1:1080`)
 3. Converts the SSH channel to a stream via `channel.into_stream()`
 4. Runs `tokio::io::copy_bidirectional(&mut local_socket, &mut ssh_stream)` to proxy data
 
-Supports SOCKS5h (domain names resolved server-side) by default. This prevents DNS leaks.
+Supports SOCKS5h (domain names resolved server-side) by default. This prevents DNS leaks — the client never resolves target hostnames locally, sending them to the server for resolution instead. This is consistent with the project's privacy design (ADR-006).
 
 ### Port Forwarding
 
@@ -92,7 +92,9 @@ On transport failure:
 4. Re-authenticate SSH session
 5. Notify SOCKS5 server and port forwards (in-flight connections fail, new connections work)
 
-Existing TCP connections through the tunnel are lost on reconnect. This is acceptable — same as any VPN.
+Reconnection is always enabled. The backoff caps at 30 seconds and continues indefinitely until the user terminates the process. Existing TCP connections through the tunnel are lost on reconnect — this is acceptable and consistent with how VPN connections behave.
+
+The channel manager orchestrates reconnection: it creates a new transport stream (by calling `transport.connect()` again) and establishes a new SSH session over it (ADR-004). This is a full reconnect — there is no "SSH reconnects over the same transport." Port forward listeners (`-L`, `-R`) are re-registered with the new session after reconnection.
 
 ### Programmatic Configuration (ADR-011)
 
@@ -103,6 +105,21 @@ The client uses programmatic configuration — no `~/.ssh/config` parsing, no cu
 3. **Environment variables**: `WRAITH_SERVER`, `WRAITH_IDENTITY` as convenience defaults
 
 This approach avoids cross-platform path issues (`~` expansion, Windows `USERPROFILE`) and makes the library API clean for programmatic consumers like the NAPI wrapper. Keys can be provided as file paths or in-memory data.
+
+### Key Material Format
+
+Key inputs (`--identity`, `--authorized-keys`, `--cert-authority`, `--key`) accept either:
+
+- **File path**: A filesystem path to a key file (e.g., `~/.ssh/id_ed25519`, `/etc/wraith/ca.pub`)
+- **In-memory data**: Raw key bytes provided programmatically via the library API or NAPI wrapper (as `Vec<u8>` in Rust, `Buffer` in Node.js)
+
+The accepted format is **OpenSSH key format** (the format used by `ssh-keygen` and OpenSSH's `~/.ssh/` files). This includes:
+- Private keys: OpenSSH format (begins with `-----BEGIN OPENSSH PRIVATE KEY-----`)
+- Public keys: OpenSSH format (e.g., `ssh-ed25519 AAAA... user@host`)
+- Certificate authority keys: OpenSSH public key format
+- Authorized keys files: Standard OpenSSH `authorized_keys` format
+
+PEM-encoded keys (PKCS#1, PKCS#8) are not supported. Use OpenSSH format keys throughout.
 
 ### CLI Interface
 
@@ -134,7 +151,7 @@ wraith connect --server example.com --forward 5432:db.internal:5432 --forward 63
 # All options
 wraith connect \
   --server <addr> \          # TCP/TLS server address (required for tcp/tls)
-  --peer <endpoint-id> \    # iroh peer ID (required for iroh)
+  --peer <endpoint-id> \    # iroh endpoint ID, base58-encoded (required for iroh)
   --transport tcp|tls|iroh \ # Transport mode
   --identity <path-or-buffer> \ # SSH private key (path or in-memory)
   --socks5 <addr:port> \    # SOCKS5 listen address (default: 127.0.0.1:1080)
@@ -154,6 +171,28 @@ wraith connect \
 - Only one SSH session per `wraith connect` process. Multiple sessions = multiple processes (or a future multiplexer).
 - No `~/.ssh/config` parsing. Configuration is programmatic via CLI flags, env vars, or library API structs (ADR-011).
 - VPN-like "route all traffic" behavior is provided by running `tun2proxy --proxy socks5://127.0.0.1:1080` alongside the client, not by a built-in TUN interface (ADR-014).
+- The CLI `wraith connect` command manages a full SSH session with SOCKS5 and port forwarding. The NAPI `connect()` function is a different operation — it opens a single SSH channel as a Duplex stream for programmatic use, with no SOCKS5 server or port forwarding. See napi-and-pubsub.md for details.
+
+## Graceful Shutdown
+
+On SIGTERM or SIGINT:
+
+1. Stop accepting new SOCKS5 connections and port forward connections
+2. Send an SSH disconnect message to the server
+3. Wait for in-flight channel data to drain (brief timeout, ~2 seconds)
+4. Close the transport stream
+5. Exit
+
+In-flight connections are not preserved across shutdown — they receive a connection reset. This matches the behavior of standard SSH tunnel tools.
+
+## Error Handling
+
+Error handling follows the project's layered pattern (see overview.md):
+
+- **Transport errors**: Trigger reconnection with exponential backoff (see Reconnection section above). If reconnection fails indefinitely, the process continues retrying until the user terminates it.
+- **Auth errors**: Cause reconnection retry. After repeated auth failures, the SOCKS5 server and port-forward listeners remain active but new channel opens fail until reconnection succeeds.
+- **Channel-level errors**: Individual channel failures (target unreachable, proxy failure) close that channel without affecting the SSH session or other channels.
+- **CLI errors**: Reported to stderr with a non-zero exit code. Fatal errors (invalid flags, key file not found) exit immediately.
 
 ## Open Questions
 
@@ -164,5 +203,7 @@ None — all resolved.
 | ADR | Decision | Summary |
 |-----|----------|---------|
 | [005](decisions/005-socks5-before-tun.md) | SOCKS5 first | SOCKS5 is the primary interface; TUN is external (tun2proxy) |
+| [006](decisions/006-no-logging-of-tunnel-destinations.md) | No logging of destinations | Client does not log SOCKS5 request targets (consistent with ADR-006) |
 | [011](decisions/011-no-ssh-config-programmatic-api.md) | Programmatic-first API | No file-based config; options are structs, env vars, or CLI flags |
 | [012](decisions/012-auth-ed25519-and-cert-authority.md) | Key + cert-authority | No password auth; OpenSSH cert-authority for multi-user |
+| [019](decisions/019-proxy-dual-semantics.md) | Proxy dual semantics | `--proxy` routes transport on client, data on server |

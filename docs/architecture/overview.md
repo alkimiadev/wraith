@@ -1,6 +1,6 @@
 ---
-status: draft
-last_updated: 2026-06-01
+status: reviewed
+last_updated: 2026-06-02
 ---
 
 # Wraith Overview
@@ -72,6 +72,8 @@ The `wraith-core` crate exports the pluggable components for embedding or progra
 
 7. **NAPI exposes both connect() and serve()** — The napi-rs wrapper provides client and server functionality, using napi-rs as the FFI bridge. The NAPI layer is transport-agnostic and not tied to pubsub. (ADR-015, ADR-016)
 
+8. **Error handling follows a consistent layered pattern** — Transport and auth errors cause reconnection (client, with exponential backoff) or connection rejection (server). Channel-level errors (target unreachable, proxy failure) close the individual channel without killing the session. Library API errors propagate via `anyhow::Result` / `thiserror` types. CLI reports errors to stderr with appropriate exit codes. NAPI errors are marshalled as JavaScript exceptions.
+
 ## Design Decisions
 
 | ADR | Decision | Summary |
@@ -94,6 +96,7 @@ The `wraith-core` crate exports the pluggable components for embedding or progra
 | [016](decisions/016-napi-expose-connect-and-serve.md) | connect + serve | NAPI exposes both client and server from the start |
 | [017](decisions/017-stealth-mode-protocol-multiplexing.md) | Stealth mode | Protocol multiplexing on port 443 |
 | [018](decisions/018-control-channel-for-pubsub.md) | Control channel | Reserved `wraith-control` destination for pubsub |
+| [019](decisions/019-proxy-dual-semantics.md) | Proxy dual semantics | `--proxy` routes transport on client, data on server |
 
 ## Open Questions
 
