@@ -48,6 +48,7 @@ pub struct ServerHandler {
     outbound_proxy: Option<ProxyConfig>,
     remote_addr: Option<SocketAddr>,
     control_channel_router: ControlChannelRouter,
+    #[allow(dead_code)]
     transport: TransportKind,
     connection_limiter: Arc<ConnectionRateLimiter>,
     connection_allowed: bool,

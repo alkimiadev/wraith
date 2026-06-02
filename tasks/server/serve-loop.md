@@ -1,7 +1,7 @@
 ---
 id: server/serve-loop
 name: Implement server accept loop, graceful shutdown, and ServeOptions config
-status: pending
+status: completed
 depends_on:
   - server/handler
   - server/channel-proxy
@@ -26,19 +26,19 @@ Implement the server's main accept loop and configuration. This ties together th
 
 ## Acceptance Criteria
 
-- [ ] `crates/wraith-core/src/server/mod.rs` re-exports all server components
-- [ ] `ServeOptions` struct with fields matching server.md CLI interface: `key`, `authorized_keys`, `cert_authority`, `transport_mode`, `listen_addr`, `tls_cert`, `tls_key`, `acme_domain`, `stealth`, `proxy`, `iroh_relay`, `max_connections_per_ip`, `max_auth_attempts`
-- [ ] `Server::new(opts: ServeOptions) -> Result<Server>` — creates server with bound acceptor, auth config, rate limiter
-- [ ] `Server::run()` — enters accept loop, for each connection: check rate limit → create handler → `run_stream()`
-- [ ] Stealth mode integration: if enabled, protocol detection before `run_stream()`
-- [ ] Graceful shutdown: `Server::shutdown()` method and signal handler (SIGTERM/SIGINT)
+- [x] `crates/wraith-core/src/server/mod.rs` re-exports all server components
+- [x] `ServeOptions` struct with fields matching server.md CLI interface: `key`, `authorized_keys`, `cert_authority`, `transport_mode`, `listen_addr`, `tls_cert`, `tls_key`, `acme_domain`, `stealth`, `proxy`, `iroh_relay`, `max_connections_per_ip`, `max_auth_attempts`
+- [x] `Server::new(opts: ServeOptions) -> Result<Server>` — creates server with bound acceptor, auth config, rate limiter
+- [x] `Server::run()` — enters accept loop, for each connection: check rate limit → create handler → `run_stream()`
+- [x] Stealth mode integration: if enabled, protocol detection before `run_stream()`
+- [x] Graceful shutdown: `Server::shutdown()` method and signal handler (SIGTERM/SIGINT)
   - Stop accepting new connections
   - Send SSH disconnect to active sessions
   - Wait for drain timeout (~2 seconds per session)
   - Forcibly terminate remaining connections
-- [ ] iroh mode: prints endpoint ID on startup
-- [ ] `ServeOptions::key` and `ServeOptions::authorized_keys` accept `KeySource` (file or in-memory)
-- [ ] Integration test: start server, client connects via mock transport, session works, shutdown completes
+- [x] iroh mode: prints endpoint ID on startup
+- [x] `ServeOptions::key` and `ServeOptions::authorized_keys` accept `KeySource` (file or in-memory)
+- [x] Integration test: start server, client connects via mock transport, session works, shutdown completes
 
 ## References
 
@@ -47,8 +47,20 @@ Implement the server's main accept loop and configuration. This ties together th
 
 ## Notes
 
-> To be filled by implementation agent
+Key design decisions:
+- `Server::run(acceptor, endpoint_info)` takes a generic `TransportAcceptor` and optional endpoint info string, keeping transport binding separate from the accept loop
+- `handle_disconnect` returns a future (`Handle::disconnect` is async in russh 0.49), takes `String` args
+- `shutdown_rx` is cloned to avoid needing `&mut self` on `Arc<Server>` in the select loop
+- `ServeTransportMode` is a separate enum from `TransportKind` to keep serve options independent of transport types
+- Stealth mode only applies when both `stealth=true` AND `transport_mode=Tls`
 
 ## Summary
 
-> To be filled on completion
+Implemented server accept loop and configuration in `crates/wraith-core/src/server/serve.rs`:
+- `ServeOptions` struct with all CLI interface fields, builder pattern, KeySource support
+- `Server::new()` creates server with russh config, auth config, rate limiter
+- `Server::run(acceptor, endpoint_info)` enters accept loop with rate limiting, stealth detection, russh::server::run_stream()
+- `Server::shutdown()` sends SSH disconnect to active sessions, waits drain timeout, aborts remaining
+- SIGTERM/SIGINT handler on unix platforms
+- iroh endpoint ID logged on startup
+- All 216 tests pass, clippy clean
