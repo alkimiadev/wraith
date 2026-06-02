@@ -58,9 +58,10 @@ impl WraithStream {
     pub async fn read(&self, size: u32) -> Result<Buffer> {
         let mut buf = vec![0u8; size as usize];
         let mut guard = self.read.lock().await;
-        let n = guard.read(&mut buf).await.map_err(|e| {
-            Error::new(Status::GenericFailure, format!("read failed: {}", e))
-        })?;
+        let n = guard
+            .read(&mut buf)
+            .await
+            .map_err(|e| Error::new(Status::GenericFailure, format!("read failed: {}", e)))?;
         if n == 0 {
             return Ok(Vec::<u8>::new().into());
         }
@@ -71,27 +72,30 @@ impl WraithStream {
     #[napi]
     pub async fn write(&self, data: Buffer) -> Result<()> {
         let mut guard = self.write.lock().await;
-        guard.write_all(&data).await.map_err(|e| {
-            Error::new(Status::GenericFailure, format!("write failed: {}", e))
-        })?;
+        guard
+            .write_all(&data)
+            .await
+            .map_err(|e| Error::new(Status::GenericFailure, format!("write failed: {}", e)))?;
         Ok(())
     }
 
     #[napi]
     pub async fn close(&self) -> Result<()> {
         let mut guard = self.write.lock().await;
-        guard.shutdown().await.map_err(|e| {
-            Error::new(Status::GenericFailure, format!("close failed: {}", e))
-        })
+        guard
+            .shutdown()
+            .await
+            .map_err(|e| Error::new(Status::GenericFailure, format!("close failed: {}", e)))
     }
 }
 
 #[napi]
 pub async fn connect(options: WraithConnectOptions) -> Result<WraithStream> {
     let key_source = resolve_key_source(&options.identity)?;
-    let auth_config = Arc::new(ClientAuthConfig::from_key_source(key_source).map_err(|e| {
-        Error::new(Status::InvalidArg, format!("invalid identity key: {}", e))
-    })?);
+    let auth_config = Arc::new(
+        ClientAuthConfig::from_key_source(key_source)
+            .map_err(|e| Error::new(Status::InvalidArg, format!("invalid identity key: {}", e)))?,
+    );
 
     let transport_mode = options.transport.to_lowercase();
     let handler = ClientHandler::from_config(&auth_config);
@@ -151,7 +155,10 @@ pub async fn connect(options: WraithConnectOptions) -> Result<WraithStream> {
         _ => {
             return Err(Error::new(
                 Status::InvalidArg,
-                format!("unknown transport '{}'; expected tcp, tls, or iroh", transport_mode),
+                format!(
+                    "unknown transport '{}'; expected tcp, tls, or iroh",
+                    transport_mode
+                ),
             ));
         }
     };
@@ -159,11 +166,12 @@ pub async fn connect(options: WraithConnectOptions) -> Result<WraithStream> {
     let auth_ok = auth_config
         .authenticate(&mut handle, &username)
         .await
-        .map_err(|e| {
-            Error::new(Status::GenericFailure, format!("ssh auth failed: {}", e))
-        })?;
+        .map_err(|e| Error::new(Status::GenericFailure, format!("ssh auth failed: {}", e)))?;
     if !auth_ok {
-        return Err(Error::new(Status::GenericFailure, "ssh authentication rejected"));
+        return Err(Error::new(
+            Status::GenericFailure,
+            "ssh authentication rejected",
+        ));
     }
 
     let channel = handle
@@ -204,7 +212,9 @@ mod tests {
 
     #[test]
     fn resolve_key_source_buffer() {
-        let identity = Some(Either::<String, Buffer>::B(Buffer::from(ED25519_PRIVATE_KEY.as_bytes().to_vec())));
+        let identity = Some(Either::<String, Buffer>::B(Buffer::from(
+            ED25519_PRIVATE_KEY.as_bytes().to_vec(),
+        )));
         let result = resolve_key_source(&identity);
         assert!(result.is_ok());
         match result.unwrap() {
