@@ -1,3 +1,7 @@
+mod tcp;
+
+pub use tcp::{TcpAcceptor, TcpTransport};
+
 use std::net::SocketAddr;
 
 use anyhow::Result;
