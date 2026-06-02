@@ -210,17 +210,7 @@ impl Handler for ServerHandler {
         _session: &mut Session,
     ) -> Result<bool, Self::Error> {
         if host_to_connect.starts_with(WRAITH_PREFIX) {
-            tracing::info!(
-                host = host_to_connect,
-                port = port_to_connect,
-                "routing to internal control channel handler"
-            );
-
             if !self.control_channel_router.has_handler() {
-                tracing::warn!(
-                    host = host_to_connect,
-                    "no control channel handler configured, rejecting channel open"
-                );
                 return Ok(false);
             }
 
@@ -228,8 +218,28 @@ impl Handler for ServerHandler {
             return Ok(true);
         }
 
-        let _ = (host_to_connect, port_to_connect, originator_address, originator_port, channel);
-        Ok(false)
+        let target_host = host_to_connect.to_string();
+        let target_port = port_to_connect;
+        let proxy_config = self.outbound_proxy.clone().unwrap_or(ProxyConfig {
+            mode: ProxyMode::Direct,
+        });
+
+        tokio::spawn(async move {
+            let target = match format!("{target_host}:{target_port}").parse::<std::net::SocketAddr>() {
+                Ok(addr) => addr,
+                Err(_) => match tokio::net::lookup_host((&target_host[..], target_port as u16)).await {
+                    Ok(mut addrs) => match addrs.next() {
+                        Some(addr) => addr,
+                        None => return,
+                    },
+                    Err(_) => return,
+                },
+            };
+            crate::server::channel_proxy::proxy_channel(channel.into_stream(), target, &proxy_config).await;
+        });
+
+        let _ = (originator_address, originator_port);
+        Ok(true)
     }
 
     async fn channel_open_session(

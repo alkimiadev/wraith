@@ -142,16 +142,13 @@ async fn connect_http_connect(
     }
 }
 
-fn map_connection_error(e: std::io::Error, target: SocketAddr) -> ChannelProxyError {
+fn map_connection_error(e: std::io::Error, _target: SocketAddr) -> ChannelProxyError {
     match e.kind() {
         std::io::ErrorKind::ConnectionRefused => ChannelProxyError::ConnectionRefused,
         std::io::ErrorKind::AddrNotAvailable
         | std::io::ErrorKind::NetworkUnreachable
         | std::io::ErrorKind::HostUnreachable => ChannelProxyError::TargetUnreachable,
-        _ => {
-            tracing::debug!(error = %e, "outbound connection failed to {:?}", target);
-            ChannelProxyError::Io(e)
-        }
+        _ => ChannelProxyError::Io(e),
     }
 }
 

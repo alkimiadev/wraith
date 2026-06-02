@@ -306,6 +306,60 @@ impl<T: Transport> ClientSession<T> {
         };
 
         let mut wait_shutdown = self.shutdown_rx.clone();
+        let reconnect_handle = Arc::clone(&self.handle);
+        let reconnect_transport = Arc::clone(&self.transport);
+        let reconnect_auth = Arc::clone(&self.auth_config);
+        let reconnect_username = self.username.clone();
+        let reconnect_shutdown = self.shutdown_rx.clone();
+        let reconnect_remote_specs = remote_specs.clone();
+
+        let reconnect_monitor = tokio::spawn(async move {
+            let mut attempts: u32 = 0;
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                if *reconnect_shutdown.borrow() {
+                    break;
+                }
+                let h = reconnect_handle.lock().await;
+                if h.is_closed() {
+                    drop(h);
+                    info!("SSH session closed, starting reconnection");
+                    let backoff = backoff_duration(attempts);
+                    warn!("reconnect attempt #{}, waiting {:?}", attempts + 1, backoff);
+                    tokio::time::sleep(backoff).await;
+
+                    let handler = ClientHandler::from_config(&reconnect_auth);
+                    let username = reconnect_username.clone();
+                    match establish_session(&*reconnect_transport, handler, &reconnect_auth, &username).await {
+                        Ok(new_handle) => {
+                            info!("reconnection successful");
+                            {
+                                let mut guard = reconnect_handle.lock().await;
+                                *guard = new_handle;
+                            }
+                            for spec in &reconnect_remote_specs {
+                                match RemoteForwarder::new(spec.clone()) {
+                                    Ok(rf) => {
+                                        let mut h = reconnect_handle.lock().await;
+                                        match rf.register(&mut h).await {
+                                            Ok(_) => debug!("re-registered remote forward: {}", spec),
+                                            Err(e) => warn!("failed to re-register remote forward {}: {e}", spec),
+                                        }
+                                    }
+                                    Err(e) => warn!("failed to create remote forwarder: {e}"),
+                                }
+                            }
+                            attempts = 0;
+                        }
+                        Err(e) => {
+                            warn!("reconnection attempt failed: {e}");
+                            attempts += 1;
+                        }
+                    }
+                }
+            }
+        });
+
         tokio::select! {
             _ = wait_shutdown.changed() => {
                 if *wait_shutdown.borrow() {
@@ -316,6 +370,8 @@ impl<T: Transport> ClientSession<T> {
                 warn!("SOCKS5 server exited unexpectedly");
             }
         }
+
+        reconnect_monitor.abort();
 
         #[cfg(unix)]
         signal_done.abort();
@@ -356,6 +412,48 @@ fn derive_username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "wraith".to_string())
+}
+
+async fn establish_session<T: Transport>(
+    transport: &T,
+    handler: ClientHandler,
+    auth_config: &ClientAuthConfig,
+    username: &str,
+) -> Result<client::Handle<ClientHandler>, ConnectError> {
+    let stream = transport.connect().await.map_err(|e| {
+        error!("transport connect failed: {e}");
+        ConnectError::ConnectionFailed
+    })?;
+
+    let config = Arc::new(client::Config::default());
+    let mut handle = client::connect_stream(config, stream, handler)
+        .await
+        .map_err(|e| {
+            error!("SSH connect failed: {e}");
+            ConnectError::ConnectionFailed
+        })?;
+
+    let auth_ok = auth_config
+        .authenticate(&mut handle, username)
+        .await
+        .map_err(|_| ConnectError::AuthFailed)?;
+    if !auth_ok {
+        return Err(ConnectError::AuthFailed);
+    }
+
+    Ok(handle)
+}
+
+fn backoff_duration(attempt: u32) -> Duration {
+    let secs: u64 = match attempt {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => 8,
+        4 => 16,
+        _ => 30,
+    };
+    Duration::from_secs(secs)
 }
 
 fn build_local_forwarders(opts: &ConnectOptions) -> Result<Vec<LocalForwarder>, ConnectError> {
