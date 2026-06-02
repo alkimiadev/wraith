@@ -62,7 +62,7 @@ pub enum ConfigError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ForwardError {
-    #[error("invalid forward specification: {spec}")]
+    #[error("invalid port forward spec: {spec}")]
     InvalidSpec { spec: String },
     #[error("bind failed")]
     BindFailed {
@@ -169,6 +169,38 @@ mod tests {
         assert!(config_err.source().is_some());
 
         let plain = AuthError::KeyRejected;
+        assert!(plain.source().is_none());
+    }
+
+    #[test]
+    fn forward_error_display() {
+        assert_eq!(
+            ForwardError::InvalidSpec { spec: "bad".to_string() }.to_string(),
+            "invalid port forward spec: bad"
+        );
+        assert_eq!(
+            ForwardError::BindFailed {
+                source: io::Error::new(io::ErrorKind::AddrInUse, "in use")
+            }
+            .to_string(),
+            "bind failed"
+        );
+        assert_eq!(
+            ForwardError::LocalConnectFailed {
+                source: io::Error::new(io::ErrorKind::ConnectionRefused, "refused")
+            }
+            .to_string(),
+            "connect to local target failed"
+        );
+    }
+
+    #[test]
+    fn forward_error_source_chaining() {
+        let io_err = io::Error::new(io::ErrorKind::AddrInUse, "in use");
+        let forward_err = ForwardError::BindFailed { source: io_err };
+        assert!(forward_err.source().is_some());
+
+        let plain = ForwardError::InvalidSpec { spec: "bad".to_string() };
         assert!(plain.source().is_none());
     }
 }
