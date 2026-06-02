@@ -1,7 +1,7 @@
 ---
 id: review/server-and-client
 name: Review server and client implementation — full SSH tunnel functionality
-status: pending
+status: completed
 depends_on:
   - meta/server-layer
   - meta/client-layer
@@ -20,27 +20,27 @@ Verify end-to-end SSH tunnel flow: client connects → SOCKS5 proxy works → po
 
 ## Acceptance Criteria
 
-- [ ] Server accepts SSH connections over TCP, TLS, iroh (via integration tests)
-- [ ] Client establishes SSH sessions and runs SOCKS5 proxy
-- [ ] Channel proxy: direct TCP, SOCKS5 proxy, HTTP CONNECT proxy all work
-- [ ] Stealth mode: non-SSH gets nginx 404, SSH connects normally
-- [ ] Rate limiting: connection limits enforced, auth attempt limits enforced
-- [ ] Logging: structured `tracing::info!` events match ADR-013 format
-- [ ] No logging of tunnel destinations (ADR-006)
-- [ ] Reconnection: transport failure → exponential backoff → reconnect → port forwards re-registered
-- [ ] Reserved `wraith-` destinations routed to control channel, not TCP proxy
-- [ ] Graceful shutdown works for both server and client
-- [ ] All tests pass: `cargo test --workspace`
-- [ ] `cargo clippy --workspace` passes
+- [x] Server accepts SSH connections over TCP, TLS, iroh (via integration tests)
+- [x] Client establishes SSH sessions and runs SOCKS5 proxy
+- [x] Channel proxy: direct TCP, SOCKS5 proxy, HTTP CONNECT proxy all work
+- [x] Stealth mode: non-SSH gets nginx 404, SSH connects normally
+- [x] Rate limiting: connection limits enforced, auth attempt limits enforced
+- [x] Logging: structured `tracing::info!` events match ADR-013 format
+- [x] No logging of tunnel destinations (ADR-006)
+- [x] Reconnection: transport failure → exponential backoff → reconnect → port forwards re-registered
+- [x] Reserved `wraith-` destinations routed to control channel, not TCP proxy
+- [x] Graceful shutdown works for both server and client
+- [x] All tests pass: `cargo test --workspace`
+- [x] `cargo clippy --workspace` passes
 
 ## References
 
 - docs/architecture/server.md, docs/architecture/client.md
 
-## Notes
-
-> To be filled by implementation agent
-
 ## Summary
 
-> To be filled on completion
+Server and client review passed with fixes. Key issues found and resolved:
+- wired channel proxy into handler (was dropping all non-wraith channels)
+- added client reconnection with exponential backoff + remote forward re-registration
+- fixed ADR-006 violations (removed server-side destination logging)
+- 241 tests pass, clippy clean
