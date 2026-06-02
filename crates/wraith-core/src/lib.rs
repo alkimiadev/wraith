@@ -8,6 +8,6 @@ pub mod error;
 #[cfg(feature = "testutil")]
 pub mod testutil;
 
-pub use error::{AuthError, ChannelError, ConfigError, TransportError};
+pub use error::{AuthError, ChannelError, ConfigError, ForwardError, TransportError};
 pub use transport::{Transport, TransportAcceptor, TransportInfo, TransportKind};
 pub use client::channel_manager::{ChannelManager, ForwardRequest};
