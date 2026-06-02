@@ -60,6 +60,27 @@ pub enum ConfigError {
     IncompatibleOptions,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ForwardError {
+    #[error("invalid port forward spec: {spec}")]
+    InvalidSpec { spec: String },
+    #[error("bind failed")]
+    BindFailed {
+        #[source]
+        source: io::Error,
+    },
+    #[error("channel open failed")]
+    ChannelOpenFailed {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    #[error("connect to local target failed")]
+    LocalConnectFailed {
+        #[source]
+        source: io::Error,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
