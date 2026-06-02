@@ -7,8 +7,9 @@ use russh::server::{Auth, Handler, Msg, Session};
 use russh::Channel;
 
 use crate::auth::ServerAuthConfig;
-
-const WRAITH_PREFIX: &str = "wraith-";
+use crate::server::control_channel::{
+    ControlChannelHandler, ControlChannelRouter, WRAITH_PREFIX,
+};
 
 #[derive(Debug, Clone)]
 pub enum ProxyMode {
@@ -26,6 +27,7 @@ pub struct ServerHandler {
     auth_config: Arc<ServerAuthConfig>,
     outbound_proxy: Option<ProxyConfig>,
     remote_addr: Option<SocketAddr>,
+    control_channel_router: ControlChannelRouter,
 }
 
 impl ServerHandler {
@@ -38,7 +40,20 @@ impl ServerHandler {
             auth_config,
             outbound_proxy,
             remote_addr,
+            control_channel_router: ControlChannelRouter::without_handler(),
         }
+    }
+
+    pub fn with_control_channel_handler(
+        mut self,
+        handler: Box<dyn ControlChannelHandler>,
+    ) -> Self {
+        self.control_channel_router = ControlChannelRouter::with_handler(handler);
+        self
+    }
+
+    pub fn control_channel_router(&self) -> &ControlChannelRouter {
+        &self.control_channel_router
     }
 }
 
@@ -98,6 +113,16 @@ impl Handler for ServerHandler {
                 port = port_to_connect,
                 "routing to internal control channel handler"
             );
+
+            if !self.control_channel_router.has_handler() {
+                tracing::warn!(
+                    host = host_to_connect,
+                    "no control channel handler configured, rejecting channel open"
+                );
+                return Ok(false);
+            }
+
+            let _ = channel;
             return Ok(true);
         }
 
@@ -251,12 +276,20 @@ mod tests {
 
     #[test]
     fn reserved_wraith_destination_routing() {
-        assert!("wraith-control".starts_with(WRAITH_PREFIX));
-        assert!("wraith-status".starts_with(WRAITH_PREFIX));
-        assert!("wraith-events".starts_with(WRAITH_PREFIX));
-        assert!(!"example.com".starts_with(WRAITH_PREFIX));
-        assert!(!"localhost".starts_with(WRAITH_PREFIX));
-        assert!(!"wraith.example.com".starts_with(WRAITH_PREFIX));
+        use crate::server::control_channel::is_reserved_destination;
+        assert!(is_reserved_destination("wraith-control"));
+        assert!(is_reserved_destination("wraith-status"));
+        assert!(is_reserved_destination("wraith-events"));
+        assert!(!is_reserved_destination("example.com"));
+        assert!(!is_reserved_destination("localhost"));
+        assert!(!is_reserved_destination("wraith.example.com"));
+    }
+
+    #[test]
+    fn server_handler_without_control_handler_rejects_wraith_destinations() {
+        let auth_config = make_empty_auth_config();
+        let handler = ServerHandler::new(auth_config, None, None);
+        assert!(!handler.control_channel_router().has_handler());
     }
 
     #[test]
