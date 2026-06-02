@@ -10,3 +10,4 @@ pub mod testutil;
 
 pub use error::{AuthError, ChannelError, ConfigError, TransportError};
 pub use transport::{Transport, TransportAcceptor, TransportInfo, TransportKind};
+pub use client::channel_manager::{ChannelManager, ForwardRequest};
