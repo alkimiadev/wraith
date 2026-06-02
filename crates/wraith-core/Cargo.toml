@@ -32,7 +32,8 @@ async-trait = "0.1"
 ipnetwork = "0.21.1"
 
 [dev-dependencies]
-wraith-core = { path = ".", features = ["testutil", "tls"] }
+wraith-core = { path = ".", features = ["testutil", "tls", "iroh"] }
 tempfile = "3"
 rcgen = "0.14"
 rand_core = "0.6"
+ssh-key = { version = "0.6", features = ["ed25519", "alloc"] }

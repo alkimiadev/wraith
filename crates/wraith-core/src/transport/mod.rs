@@ -1,6 +1,10 @@
 mod tcp;
+#[cfg(feature = "iroh")]
+mod iroh_transport;
 
 pub use tcp::{TcpAcceptor, TcpTransport};
+#[cfg(feature = "iroh")]
+pub use iroh_transport::{IrohAcceptor, IrohTransport};
 
 #[cfg(feature = "tls")]
 mod tls;
