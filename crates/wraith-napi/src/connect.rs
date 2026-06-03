@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 use wraith_core::auth::client_auth::{ClientAuthConfig, ClientHandler};
 use wraith_core::auth::keys::KeySource;
-use wraith_core::transport::{TcpTransport, TlsTransport, Transport};
+use wraith_core::transport::{IrohTransport, TcpTransport, TlsTransport, Transport};
 
 const DEFAULT_HOST: &str = "wraith-control";
 const DEFAULT_PORT: u32 = 0;
@@ -153,10 +153,49 @@ pub async fn connect(options: WraithConnectOptions) -> Result<WraithStream> {
                 })?
         }
         "iroh" => {
-            return Err(Error::new(
-                Status::GenericFailure,
-                "iroh transport is not yet supported in napi connect()".to_string(),
-            ));
+            let peer = options.peer.as_ref().ok_or_else(|| {
+                Error::new(Status::InvalidArg, "peer is required for iroh transport")
+            })?;
+            let node_id: iroh::NodeId = peer.parse().map_err(|e| {
+                Error::new(
+                    Status::InvalidArg,
+                    format!("invalid iroh peer ID '{}': {}", peer, e),
+                )
+            })?;
+            let relay_url: Option<iroh::RelayUrl> = match options.iroh_relay.as_deref() {
+                Some(u) => Some(u.parse().map_err(|e| {
+                    Error::new(Status::InvalidArg, format!("invalid iroh relay URL: {}", e))
+                })?),
+                None => None,
+            };
+            let proxy_url: Option<url::Url> = match options.proxy.as_deref() {
+                Some(u) => Some(u.parse().map_err(|e| {
+                    Error::new(Status::InvalidArg, format!("invalid proxy URL: {}", e))
+                })?),
+                None => None,
+            };
+            let transport = IrohTransport::new(node_id, relay_url, proxy_url)
+                .await
+                .map_err(|e| {
+                    Error::new(
+                        Status::GenericFailure,
+                        format!("iroh endpoint setup failed: {}", e),
+                    )
+                })?;
+            let stream = transport.connect().await.map_err(|e| {
+                Error::new(
+                    Status::GenericFailure,
+                    format!("iroh connect failed: {}", e),
+                )
+            })?;
+            client::connect_stream(config, stream, handler)
+                .await
+                .map_err(|e| {
+                    Error::new(
+                        Status::GenericFailure,
+                        format!("ssh handshake failed: {}", e),
+                    )
+                })?
         }
         _ => {
             return Err(Error::new(

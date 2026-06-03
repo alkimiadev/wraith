@@ -1,8 +1,7 @@
 //! NAPI `serve()` function and `WraithServer` type.
 //!
-//! Starts a TCP-based SSH server that emits new channel streams via a
-//! `ThreadsafeFunction` callback. Currently supports TCP transport only;
-//! TLS and iroh will be added in a future release.
+//! Starts an SSH server that emits new channel streams via a
+//! `ThreadsafeFunction` callback. Supports TCP, TLS, and iroh transports.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -32,6 +31,7 @@ pub struct WraithServeOptions {
     pub acme_domain: Option<String>,
     pub listen: Option<String>,
     pub iroh_relay: Option<String>,
+    pub proxy: Option<String>,
 }
 
 fn resolve_key_source(
@@ -257,6 +257,7 @@ type ServerTsfn = ThreadsafeFunction<ConnectionEventWrapper, (), ConnectionEvent
 pub struct WraithServer {
     shutdown_tx: tokio::sync::watch::Sender<bool>,
     listen_addr: String,
+    endpoint_id: Option<String>,
     on_connection_tsfn: Arc<Mutex<Option<ServerTsfn>>>,
 }
 
@@ -329,6 +330,11 @@ impl WraithServer {
     #[napi(getter)]
     pub fn listen_addr(&self) -> napi::Result<String> {
         Ok(self.listen_addr.clone())
+    }
+
+    #[napi(getter, ts_return_type = "string | null")]
+    pub fn endpoint_id(&self) -> napi::Result<Option<String>> {
+        Ok(self.endpoint_id.clone())
     }
 }
 
@@ -429,6 +435,7 @@ pub async fn serve(options: WraithServeOptions) -> napi::Result<WraithServer> {
                     connection_limiter,
                     shutdown_rx,
                     tsfn_for_loop,
+                    "tcp".to_string(),
                 )
                 .await;
             });
@@ -436,17 +443,199 @@ pub async fn serve(options: WraithServeOptions) -> napi::Result<WraithServer> {
             Ok(WraithServer {
                 shutdown_tx,
                 listen_addr: actual_listen,
+                endpoint_id: None,
                 on_connection_tsfn: tsfn_holder,
             })
         }
-        ServeTransportMode::Tls => Err(napi::Error::new(
-            napi::Status::GenericFailure,
-            "TLS transport is not yet supported in napi serve()".to_string(),
-        )),
-        ServeTransportMode::Iroh => Err(napi::Error::new(
-            napi::Status::GenericFailure,
-            "iroh transport is not yet supported in napi serve()".to_string(),
-        )),
+        ServeTransportMode::Tls => {
+            use wraith_core::transport::TlsAcceptor;
+
+            let addr = parse_addr(listen_addr_str)?;
+
+            let tls_cert_path = options.tls_cert.as_ref().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    "tlsCert is required for TLS transport".to_string(),
+                )
+            })?;
+            let tls_key_path = options.tls_key.as_ref().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    "tlsKey is required for TLS transport".to_string(),
+                )
+            })?;
+
+            let cert_data = std::fs::read(tls_cert_path).map_err(|e| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!("failed to read TLS cert '{}': {}", tls_cert_path, e),
+                )
+            })?;
+            let key_data = std::fs::read(tls_key_path).map_err(|e| {
+                napi::Error::new(
+                    napi::Status::InvalidArg,
+                    format!("failed to read TLS key '{}': {}", tls_key_path, e),
+                )
+            })?;
+
+            let certs: Vec<rustls_pki_types::CertificateDer<'static>> =
+                rustls_pemfile::certs(&mut &cert_data[..])
+                    .collect::<std::result::Result<Vec<_>, std::io::Error>>()
+                    .map_err(|e| {
+                        napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!("failed to parse TLS certificates: {}", e),
+                        )
+                    })?;
+            let key: rustls_pki_types::PrivateKeyDer<'static> =
+                rustls_pemfile::private_key(&mut &key_data[..])
+                    .map_err(|e| {
+                        napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!("failed to parse TLS private key: {}", e),
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!("no private key found in {}", tls_key_path),
+                        )
+                    })?;
+
+            let acceptor = TlsAcceptor::bind(addr, certs, key, None).await.map_err(|e| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    format!("tls bind failed: {}", e),
+                )
+            })?;
+            let actual_listen = acceptor.listen_addr().to_string();
+
+            let auth_config = Arc::new(
+                ServerAuthConfig::from_keys_and_ca(authorized_keys_source, cert_authority_source)
+                    .map_err(|e| {
+                        napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!("auth config error: {}", e),
+                        )
+                    })?,
+            );
+
+            let private_key =
+                wraith_core::auth::keys::load_private_key(host_key_source).map_err(|e| {
+                    napi::Error::new(napi::Status::InvalidArg, format!("host key error: {}", e))
+                })?;
+
+            let config = Arc::new(server::Config {
+                keys: vec![private_key],
+                ..Default::default()
+            });
+
+            let connection_limiter = Arc::new(ConnectionRateLimiter::new(0));
+            let shutdown_rx = shutdown_tx.subscribe();
+            let tsfn_holder: Arc<Mutex<Option<ServerTsfn>>> = Arc::new(Mutex::new(None));
+
+            let tsfn_for_loop = tsfn_holder.clone();
+
+            tokio::spawn(async move {
+                run_accept_loop(
+                    acceptor,
+                    config,
+                    auth_config,
+                    connection_limiter,
+                    shutdown_rx,
+                    tsfn_for_loop,
+                    "tls".to_string(),
+                )
+                .await;
+            });
+
+            Ok(WraithServer {
+                shutdown_tx,
+                listen_addr: actual_listen,
+                endpoint_id: None,
+                on_connection_tsfn: tsfn_holder,
+            })
+        }
+        ServeTransportMode::Iroh => {
+            use wraith_core::transport::IrohAcceptor;
+
+            let relay_url: Option<iroh::RelayUrl> = match options.iroh_relay.as_deref() {
+                Some(u) => Some(u.parse().map_err(|e| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        format!("invalid iroh relay URL: {}", e),
+                    )
+                })?),
+                None => None,
+            };
+
+            let proxy_url: Option<url::Url> = match options.proxy.as_deref() {
+                Some(u) => Some(u.parse().map_err(|e| {
+                    napi::Error::new(
+                        napi::Status::InvalidArg,
+                        format!("invalid proxy URL: {}", e),
+                    )
+                })?),
+                None => None,
+            };
+
+            let acceptor = IrohAcceptor::bind(relay_url, proxy_url)
+                .await
+                .map_err(|e| {
+                    napi::Error::new(
+                        napi::Status::GenericFailure,
+                        format!("iroh bind failed: {}", e),
+                    )
+                })?;
+
+            let iroh_endpoint_id = acceptor.endpoint_id();
+
+            let auth_config = Arc::new(
+                ServerAuthConfig::from_keys_and_ca(authorized_keys_source, cert_authority_source)
+                    .map_err(|e| {
+                        napi::Error::new(
+                            napi::Status::InvalidArg,
+                            format!("auth config error: {}", e),
+                        )
+                    })?,
+            );
+
+            let private_key =
+                wraith_core::auth::keys::load_private_key(host_key_source).map_err(|e| {
+                    napi::Error::new(napi::Status::InvalidArg, format!("host key error: {}", e))
+                })?;
+
+            let config = Arc::new(server::Config {
+                keys: vec![private_key],
+                ..Default::default()
+            });
+
+            let connection_limiter = Arc::new(ConnectionRateLimiter::new(0));
+            let shutdown_rx = shutdown_tx.subscribe();
+            let tsfn_holder: Arc<Mutex<Option<ServerTsfn>>> = Arc::new(Mutex::new(None));
+
+            let tsfn_for_loop = tsfn_holder.clone();
+
+            tokio::spawn(async move {
+                run_accept_loop(
+                    acceptor,
+                    config,
+                    auth_config,
+                    connection_limiter,
+                    shutdown_rx,
+                    tsfn_for_loop,
+                    "iroh".to_string(),
+                )
+                .await;
+            });
+
+            Ok(WraithServer {
+                shutdown_tx,
+                listen_addr: String::new(),
+                endpoint_id: Some(iroh_endpoint_id),
+                on_connection_tsfn: tsfn_holder,
+            })
+        }
     }
 }
 
@@ -457,6 +646,7 @@ async fn run_accept_loop<A>(
     connection_limiter: Arc<ConnectionRateLimiter>,
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     tsfn_holder: Arc<Mutex<Option<ServerTsfn>>>,
+    transport_kind_str: String,
 ) where
     A: TransportAcceptor + Send + Sync + 'static,
 {
@@ -495,7 +685,7 @@ async fn run_accept_loop<A>(
         let config = Arc::clone(&config);
         let tsfn_holder = tsfn_holder.clone();
         let remote_addr_str = remote_addr.map(|a| a.to_string());
-        let transport_kind_str = "tcp".to_string();
+        let transport_kind_str = transport_kind_str.clone();
 
         tokio::spawn(async move {
             let running = match server::run_stream(config, stream, handler).await {

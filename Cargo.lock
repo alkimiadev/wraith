@@ -5637,10 +5637,14 @@ name = "wraith-napi"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "iroh",
  "napi",
  "napi-derive",
  "russh",
+ "rustls-pemfile",
+ "rustls-pki-types",
  "tokio",
+ "url",
  "wraith-core",
 ]
 

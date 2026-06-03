@@ -165,8 +165,6 @@ server.onConnection((event) => {
 });
 ```
 
-> **Note:** The NAPI `serve()` currently supports TCP transport only. TLS and iroh transports will be added in a future release.
-
 ## Status and stability
 
 This is **alpha software**. While it depends on well-established libraries (russh, tokio, rustls, iroh) for SSH, async I/O, TLS, and QUIC respectively, the integration layer that ties them together has not been battle-tested. Potential concerns include:
