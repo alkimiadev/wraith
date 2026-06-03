@@ -19,7 +19,7 @@ mod iroh_transport;
 
 pub use tcp::{TcpAcceptor, TcpTransport};
 #[cfg(feature = "iroh")]
-pub use iroh_transport::{IrohAcceptor, IrohTransport};
+pub use iroh_transport::{IrohAcceptor, IrohTransport, ALPN as IROH_ALPN};
 
 #[cfg(feature = "tls")]
 mod tls;
