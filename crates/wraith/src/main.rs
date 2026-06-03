@@ -1,6 +1,6 @@
 //! # wraith
 //!
-//! CLI binary for [Wraith](https://github.com/alkdev/wraith), a self-hostable SSH-based tunnel
+//! CLI binary for [Wraith](https://git.alk.dev/alkdev/wraith), a self-hostable SSH-based tunnel
 //! tool. Provides `wraith connect` (client) and `wraith serve` (server) subcommands with
 //! pluggable transports (TCP, TLS, iroh).
 //!

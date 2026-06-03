@@ -1,6 +1,6 @@
 //! # wraith-napi
 //!
-//! Node.js native addon for [Wraith](https://github.com/alkdev/wraith) via napi-rs.
+//! Node.js native addon for [Wraith](https://git.alk.dev/alkdev/wraith) via napi-rs.
 //! Exposes `connect()` and `serve()` functions for programmatic SSH tunnel creation.
 //!
 //! > **Alpha software.** The NAPI interface may change between versions.

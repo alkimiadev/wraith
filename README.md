@@ -227,7 +227,7 @@ This is **alpha software**. While it depends on well-established libraries (russ
 - **API stability** — the library API (`wraith-core`) and NAPI interface may change between versions
 - **Performance** — no load testing or benchmarking has been done yet
 
-Please test thoroughly and [file issues](../../issues) for any problems you encounter.
+Please test thoroughly and [file issues](https://git.alk.dev/alkdev/wraith/issues) for any problems you encounter.
 
 ## License
 

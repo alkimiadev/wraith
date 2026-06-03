@@ -1,6 +1,6 @@
 //! # wraith-core
 //!
-//! Core library for [Wraith](https://github.com/alkdev/wraith), a self-hostable SSH-based
+//! Core library for [Wraith](https://git.alk.dev/alkdev/wraith), a self-hostable SSH-based
 //! tunnel tool. This crate provides the transport abstraction, SOCKS5 server, port forwarding,
 //! authentication, and server handler — everything needed to build a wraith client or server
 //! on top of pluggable transports.
