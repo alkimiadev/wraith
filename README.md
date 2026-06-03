@@ -165,6 +165,59 @@ server.onConnection((event) => {
 });
 ```
 
+### iroh (peer-to-peer)
+
+iroh transport eliminates the need for public IPs or port forwarding. Both sides discover each other through a relay, then establish a direct QUIC connection. This is ideal for services behind NAT, distributed systems, or any scenario where opening ports is impractical.
+
+```js
+// Server: starts an iroh endpoint and prints its peer ID
+const server = await serve({
+  transport: "iroh",
+  hostKey: "/path/to/host_key",
+  authorizedKeys: "/path/to/authorized_keys",
+  irohRelay: "https://relay.iroh.network/",  // optional, defaults to iroh's relay
+  proxy: "socks5://proxy.example.com:1080", // optional, for restrictive networks
+});
+console.log("iroh endpoint ID:", server.endpointId);
+// e.g. iroh endpoint ID: abc23xyz...
+
+// Clients connect using that peer ID
+const stream = await connect({
+  peer: server.endpointId,
+  transport: "iroh",
+  identity: "/path/to/key",
+  irohRelay: "https://relay.iroh.network/",  // must match the server's relay
+  proxy: "socks5://proxy.example.com:1080",   // optional
+});
+```
+
+The `endpointId` property returns the server's z-base-32 encoded iroh node ID. Share this ID with clients so they can connect — no DNS, no public IP, no port forwarding required.
+
+### TLS
+
+TLS transport wraps SSH in TLS, making the connection indistinguishable from HTTPS traffic to deep packet inspection:
+
+```js
+// Server
+const server = await serve({
+  transport: "tls",
+  hostKey: "/path/to/host_key",
+  authorizedKeys: "/path/to/authorized_keys",
+  listen: "0.0.0.0:443",
+  tlsCert: "/path/to/cert.pem",
+  tlsKey: "/path/to/key.pem",
+});
+
+// Client
+const stream = await connect({
+  server: "example.com:443",
+  transport: "tls",
+  identity: "/path/to/key",
+  tlsServerName: "example.com",  // optional, SNI hostname
+  insecure: true,                 // accept self-signed certs (dev only)
+});
+```
+
 ## Status and stability
 
 This is **alpha software**. While it depends on well-established libraries (russh, tokio, rustls, iroh) for SSH, async I/O, TLS, and QUIC respectively, the integration layer that ties them together has not been battle-tested. Potential concerns include:
