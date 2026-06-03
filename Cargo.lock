@@ -5644,6 +5644,7 @@ dependencies = [
  "rustls-pemfile",
  "rustls-pki-types",
  "tokio",
+ "tracing",
  "url",
  "wraith-core",
 ]

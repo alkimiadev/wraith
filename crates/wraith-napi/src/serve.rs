@@ -225,6 +225,7 @@ impl russh::server::Handler for NapiServerHandler {
         _channel: Channel<server::Msg>,
         _session: &mut russh::server::Session,
     ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!("rejected session channel (shell/exec not supported)");
         Ok(false)
     }
 
@@ -235,19 +236,149 @@ impl russh::server::Handler for NapiServerHandler {
         _originator_port: u32,
         _session: &mut russh::server::Session,
     ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!("rejected x11 channel");
         Ok(false)
     }
 
     async fn channel_open_forwarded_tcpip(
         &mut self,
         _channel: Channel<server::Msg>,
-        _host_to_connect: &str,
-        _port_to_connect: u32,
+        host_to_connect: &str,
+        port_to_connect: u32,
         _originator_address: &str,
         _originator_port: u32,
         _session: &mut russh::server::Session,
     ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!(
+            target = %format!("{host_to_connect}:{port_to_connect}"),
+            "rejected forwarded-tcpip channel"
+        );
         Ok(false)
+    }
+
+    async fn exec_request(
+        &mut self,
+        channel: russh::ChannelId,
+        data: &[u8],
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, data_len = data.len(), "rejected exec request");
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn shell_request(
+        &mut self,
+        channel: russh::ChannelId,
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, "rejected shell request");
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn subsystem_request(
+        &mut self,
+        channel: russh::ChannelId,
+        name: &str,
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, subsystem = name, "rejected subsystem request");
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn pty_request(
+        &mut self,
+        channel: russh::ChannelId,
+        term: &str,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
+        modes: &[(russh::Pty, u32)],
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, term = term, "rejected pty request");
+        let _ = (col_width, row_height, pix_width, pix_height, modes);
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn env_request(
+        &mut self,
+        channel: russh::ChannelId,
+        variable_name: &str,
+        variable_value: &str,
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, variable = variable_name, "rejected env request");
+        let _ = variable_value;
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn x11_request(
+        &mut self,
+        channel: russh::ChannelId,
+        single_connection: bool,
+        x11_auth_protocol: &str,
+        x11_auth_cookie: &str,
+        x11_screen_number: u32,
+        session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::warn!(channel = %channel, "rejected x11 request");
+        let _ = (single_connection, x11_auth_protocol, x11_auth_cookie, x11_screen_number);
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn agent_request(
+        &mut self,
+        channel: russh::ChannelId,
+        _session: &mut russh::server::Session,
+    ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!(channel = %channel, "rejected agent forwarding request");
+        Ok(false)
+    }
+
+    async fn tcpip_forward(
+        &mut self,
+        address: &str,
+        port: &mut u32,
+        _session: &mut russh::server::Session,
+    ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!(address = address, port = *port, "rejected tcpip-forward request");
+        Ok(false)
+    }
+
+    async fn cancel_tcpip_forward(
+        &mut self,
+        address: &str,
+        port: u32,
+        _session: &mut russh::server::Session,
+    ) -> std::result::Result<bool, Self::Error> {
+        let _ = (address, port);
+        Ok(false)
+    }
+
+    async fn streamlocal_forward(
+        &mut self,
+        socket_path: &str,
+        _session: &mut russh::server::Session,
+    ) -> std::result::Result<bool, Self::Error> {
+        tracing::warn!(socket_path = socket_path, "rejected streamlocal-forward request");
+        Ok(false)
+    }
+
+    async fn signal(
+        &mut self,
+        channel: russh::ChannelId,
+        signal: russh::Sig,
+        _session: &mut russh::server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        tracing::debug!(channel = %channel, signal = ?signal, "received signal (ignored)");
+        Ok(())
     }
 }
 
@@ -418,6 +549,8 @@ pub async fn serve(options: WraithServeOptions) -> napi::Result<WraithServer> {
 
             let config = Arc::new(server::Config {
                 keys: vec![private_key],
+                methods: russh::MethodSet::PUBLICKEY,
+                preferred: russh::Preferred::DEFAULT,
                 ..Default::default()
             });
 
@@ -527,6 +660,8 @@ pub async fn serve(options: WraithServeOptions) -> napi::Result<WraithServer> {
 
             let config = Arc::new(server::Config {
                 keys: vec![private_key],
+                methods: russh::MethodSet::PUBLICKEY,
+                preferred: russh::Preferred::DEFAULT,
                 ..Default::default()
             });
 
@@ -607,6 +742,8 @@ pub async fn serve(options: WraithServeOptions) -> napi::Result<WraithServer> {
 
             let config = Arc::new(server::Config {
                 keys: vec![private_key],
+                methods: russh::MethodSet::PUBLICKEY,
+                preferred: russh::Preferred::DEFAULT,
                 ..Default::default()
             });
 

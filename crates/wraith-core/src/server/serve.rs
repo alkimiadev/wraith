@@ -255,6 +255,8 @@ impl Server {
         let config = Arc::new(Config {
             keys: vec![private_key],
             max_auth_attempts: opts.max_auth_attempts,
+            methods: russh::MethodSet::PUBLICKEY,
+            preferred: russh::Preferred::DEFAULT,
             ..Default::default()
         });
 

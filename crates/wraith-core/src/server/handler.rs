@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use russh::keys::ssh_key::HashAlg;
 use russh::server::{Auth, Handler, Msg, Session};
 use russh::Channel;
+use russh::ChannelId;
 
 use crate::auth::ServerAuthConfig;
 use crate::server::control_channel::{
@@ -245,8 +246,13 @@ impl Handler for ServerHandler {
     async fn channel_open_session(
         &mut self,
         _channel: Channel<Msg>,
-        _session: &mut Session,
+        session: &mut Session,
     ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            "rejected session channel (shell/exec not supported)"
+        );
+        let _ = session;
         Ok(false)
     }
 
@@ -255,21 +261,207 @@ impl Handler for ServerHandler {
         _channel: Channel<Msg>,
         _originator_address: &str,
         _originator_port: u32,
-        _session: &mut Session,
+        session: &mut Session,
     ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            "rejected x11 channel"
+        );
+        let _ = session;
         Ok(false)
     }
 
     async fn channel_open_forwarded_tcpip(
         &mut self,
         _channel: Channel<Msg>,
-        _host_to_connect: &str,
-        _port_to_connect: u32,
+        host_to_connect: &str,
+        port_to_connect: u32,
         _originator_address: &str,
         _originator_port: u32,
-        _session: &mut Session,
+        session: &mut Session,
     ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            target = %format!("{host_to_connect}:{port_to_connect}"),
+            "rejected forwarded-tcpip channel (remote port forwarding not supported)"
+        );
+        let _ = session;
         Ok(false)
+    }
+
+    async fn exec_request(
+        &mut self,
+        channel: ChannelId,
+        data: &[u8],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            data_len = data.len(),
+            "rejected exec request on channel (shell/exec not supported)"
+        );
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn shell_request(
+        &mut self,
+        channel: ChannelId,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            "rejected shell request on channel"
+        );
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn subsystem_request(
+        &mut self,
+        channel: ChannelId,
+        name: &str,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            subsystem = name,
+            "rejected subsystem request on channel"
+        );
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn pty_request(
+        &mut self,
+        channel: ChannelId,
+        term: &str,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
+        modes: &[(russh::Pty, u32)],
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            term = term,
+            "rejected pty request on channel"
+        );
+        let _ = (col_width, row_height, pix_width, pix_height, modes);
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn env_request(
+        &mut self,
+        channel: ChannelId,
+        variable_name: &str,
+        variable_value: &str,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            variable = variable_name,
+            "rejected env request on channel"
+        );
+        let _ = variable_value;
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn x11_request(
+        &mut self,
+        channel: ChannelId,
+        single_connection: bool,
+        x11_auth_protocol: &str,
+        x11_auth_cookie: &str,
+        x11_screen_number: u32,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            "rejected x11 request on channel"
+        );
+        let _ = (single_connection, x11_auth_protocol, x11_auth_cookie, x11_screen_number);
+        let _ = session.channel_failure(channel);
+        Ok(())
+    }
+
+    async fn agent_request(
+        &mut self,
+        channel: ChannelId,
+        session: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            "rejected agent forwarding request on channel"
+        );
+        let _ = session;
+        Ok(false)
+    }
+
+    async fn tcpip_forward(
+        &mut self,
+        address: &str,
+        port: &mut u32,
+        session: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            address = address,
+            port = *port,
+            "rejected tcpip-forward request (remote port forwarding not supported)"
+        );
+        let _ = session;
+        Ok(false)
+    }
+
+    async fn cancel_tcpip_forward(
+        &mut self,
+        address: &str,
+        port: u32,
+        session: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        let _ = (address, port, session);
+        Ok(false)
+    }
+
+    async fn streamlocal_forward(
+        &mut self,
+        socket_path: &str,
+        session: &mut Session,
+    ) -> Result<bool, Self::Error> {
+        tracing::warn!(
+            remote_addr = ?self.remote_addr,
+            socket_path = socket_path,
+            "rejected streamlocal-forward request"
+        );
+        let _ = session;
+        Ok(false)
+    }
+
+    async fn signal(
+        &mut self,
+        channel: ChannelId,
+        signal: russh::Sig,
+        session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        tracing::debug!(
+            remote_addr = ?self.remote_addr,
+            channel = %channel,
+            signal = ?signal,
+            "received signal on channel (ignored)"
+        );
+        let _ = session;
+        Ok(())
     }
 }
 
