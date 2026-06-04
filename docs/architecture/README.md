@@ -7,7 +7,7 @@ last_updated: 2026-06-02
 
 ## Current State
 
-Architecture specification reviewed and ready for implementation. All open questions resolved. 19 ADRs accepted.
+Architecture specification reviewed and ready for implementation. 19 ADRs accepted. Configuration architecture under exploration — see [research/configuration.md](../research/configuration.md).
 
 ## Architecture Documents
 
@@ -19,6 +19,12 @@ Architecture specification reviewed and ready for implementation. All open quest
 | [server.md](server.md) | reviewed | Server acceptance, channel handling, proxy |
 | [tun-shim.md](tun-shim.md) | deprecated | TUN interface wrapper — **deferred**, use tun2proxy |
 | [napi-and-pubsub.md](napi-and-pubsub.md) | reviewed | NAPI wrapper and pubsub event target adapter |
+
+## Research Documents
+
+| Document | Status | Description |
+|----------|--------|-------------|
+| [configuration.md](../research/configuration.md) | draft | Configuration architecture: static/dynamic split, hot reload, forwarding policy |
 
 ## ADR Table
 
@@ -46,7 +52,8 @@ Architecture specification reviewed and ready for implementation. All open quest
 
 ## Open Questions
 
-All open questions have been resolved. See [open-questions.md](open-questions.md) for details on each resolution.
+Most open questions have been resolved. New questions from configuration
+research — see [open-questions.md](open-questions.md) for details.
 
 ## Lifecycle Definitions
 

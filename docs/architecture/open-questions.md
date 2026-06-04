@@ -91,3 +91,47 @@ last_updated: 2026-06-02
 - **Priority**: ~~low~~ —
 - **Resolution**: ADR-015 — Use napi-rs. It's the standard for Node.js native addons, matches our primary consumer (TypeScript/Node.js), and has the best ecosystem and documentation. If future Python or mobile consumers are needed, a separate uniffi layer can be added — the Rust core doesn't change.
 - **Cross-references**: [ADR-015](decisions/015-napi-rs-for-ffi-bridge.md), napi-and-pubsub.md
+
+## Configuration
+
+### OQ-12: Per-user forwarding scope vs global rules
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: open
+- **Priority**: medium
+- **Resolution**: (pending)
+- **Cross-references**: ADR-020 (proposed)
+
+### OQ-13: Config file auto-reload via file watching
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: resolved
+- **Priority**: low
+- **Resolution**: No file watching. CLI loads once at startup; NAPI/hub reload explicitly. File watching is a potential attack vector and unnecessary complexity for a security tool.
+- **Cross-references**: ADR-020 (proposed)
+
+### OQ-14: ArcSwap vs RwLock for dynamic config
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: resolved
+- **Priority**: low
+- **Resolution**: ArcSwap. Lock-free reads on the hot path (every auth check, every channel open). `RwLock` adds contention. `arc-swap` is small (~500 lines) and well-maintained.
+- **Cross-references**: ADR-020 (proposed)
+
+### OQ-15: TLS + WebTransport + iroh QUIC listener coexistence
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: open
+- **Priority**: medium
+- **Resolution**: (pending — needs R&D in WebTransport transport session)
+- **Cross-references**: ADR-022 (proposed)
+
+### OQ-16: Transport-specific forwarding policy (e.g., WebTransport clients restricted to wraith-* channels)
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: open
+- **Priority**: low
+- **Resolution**: (pending — defer to forwarding policy design)
+- **Cross-references**: ADR-021 (proposed)
+
+### OQ-17: Transport-aware auth layer (SSH keys vs API keys for non-SSH transports)
+- **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: open
+- **Priority**: medium
+- **Resolution**: (pending — defer until non-SSH transport is implemented)
+- **Cross-references**: ADR-020 (proposed), OQ-15
