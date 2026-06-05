@@ -1,6 +1,6 @@
 ---
-status: reviewed
-last_updated: 2026-06-02
+status: draft
+last_updated: 2026-06-04
 ---
 
 # Open Questions
@@ -99,39 +99,78 @@ last_updated: 2026-06-02
 - **Status**: open
 - **Priority**: medium
 - **Resolution**: (pending)
-- **Cross-references**: ADR-020 (proposed)
+- **Cross-references**: configuration.md
 
 ### OQ-13: Config file auto-reload via file watching
 - **Origin**: [research/configuration.md](../research/configuration.md)
 - **Status**: resolved
 - **Priority**: low
 - **Resolution**: No file watching. CLI loads once at startup; NAPI/hub reload explicitly. File watching is a potential attack vector and unnecessary complexity for a security tool.
-- **Cross-references**: ADR-020 (proposed)
+- **Cross-references**: configuration.md
 
 ### OQ-14: ArcSwap vs RwLock for dynamic config
 - **Origin**: [research/configuration.md](../research/configuration.md)
 - **Status**: resolved
 - **Priority**: low
 - **Resolution**: ArcSwap. Lock-free reads on the hot path (every auth check, every channel open). `RwLock` adds contention. `arc-swap` is small (~500 lines) and well-maintained.
-- **Cross-references**: ADR-020 (proposed)
+- **Cross-references**: configuration.md
 
 ### OQ-15: TLS + WebTransport + iroh QUIC listener coexistence
 - **Origin**: [research/configuration.md](../research/configuration.md)
 - **Status**: open
 - **Priority**: medium
 - **Resolution**: (pending — needs R&D in WebTransport transport session)
-- **Cross-references**: ADR-022 (proposed)
+- **Cross-references**: [auth.md](auth.md), OQ-19
 
 ### OQ-16: Transport-specific forwarding policy (e.g., WebTransport clients restricted to wraith-* channels)
 - **Origin**: [research/configuration.md](../research/configuration.md)
 - **Status**: open
 - **Priority**: low
 - **Resolution**: (pending — defer to forwarding policy design)
-- **Cross-references**: ADR-021 (proposed)
+- **Cross-references**: configuration.md
 
 ### OQ-17: Transport-aware auth layer (SSH keys vs API keys for non-SSH transports)
 - **Origin**: [research/configuration.md](../research/configuration.md)
+- **Status**: ~~resolved~~
+- **Priority**: ~~medium~~ —
+- **Resolution**: ADR-023 — Unified auth with shared key material. SSH transports use SSH pubkey auth. Non-SSH transports (WebTransport) use Ed25519-signed timestamp tokens. Both verify against the same `authorized_keys` set. The presentation differs per transport, but the identity is unified. `AuthPolicy` holds both `SshAuthConfig` and `TokenAuthConfig`, with `TokenKeySource::Shared` as the default (same keys for both paths). `IdentityProvider` trait decouples wraith-core from identity storage.
+- **Cross-references**: [ADR-023](decisions/023-unified-auth-shared-key-material.md), [auth.md](auth.md), OQ-15
+
+## Auth
+
+### OQ-18: Source of Identity.scopes — ForwardingPolicy, IdentityProvider, or both?
+- **Origin**: [auth.md](auth.md)
 - **Status**: open
 - **Priority**: medium
-- **Resolution**: (pending — defer until non-SSH transport is implemented)
-- **Cross-references**: ADR-020 (proposed), OQ-15
+- **Resolution**: (pending)
+- **Cross-references**: ADR-023, [call-protocol.md](call-protocol.md)
+
+### OQ-19: Separate TLS identity for WebTransport vs shared with SSH-over-TLS?
+- **Origin**: [auth.md](auth.md)
+- **Status**: open
+- **Priority**: low
+- **Resolution**: (pending)
+- **Cross-references**: OQ-15
+
+## Call Protocol
+
+### OQ-20: Spoke registration and discovery on connect/disconnect
+- **Origin**: [call-protocol.md](call-protocol.md)
+- **Status**: open
+- **Priority**: medium
+- **Resolution**: (pending — registration on connect / cleanup on disconnect is the leading approach)
+- **Cross-references**: ADR-024, ADR-025
+
+### OQ-21: Routing calls to specific spokes with same-service operations
+- **Origin**: [call-protocol.md](call-protocol.md)
+- **Status**: ~~resolved~~
+- **Priority**: ~~medium~~ —
+- **Resolution**: ADR-024, ADR-025 — Operation paths use `/{spoke}/{service}/{op}` format. The first path segment identifies the spoke and routes the call to the correct connected node. Multiple spokes exposing the same service (e.g., two dev envs both with `/fs/*`) are differentiated by the spoke prefix (`/dev1/fs/readFile` vs `/dev2/fs/readFile`). The hub maintains a routing table mapping spoke identity to connection. This mirrors iroh's ALPN dispatch: first segment = routing key.
+- **Cross-references**: [call-protocol.md](call-protocol.md), ADR-024, ADR-025
+
+### OQ-22: Client streaming (streaming inputs) in the call protocol?
+- **Origin**: [call-protocol.md](call-protocol.md)
+- **Status**: open
+- **Priority**: low
+- **Resolution**: (pending)
+- **Cross-references**: ADR-024

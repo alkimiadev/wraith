@@ -490,13 +490,20 @@ compat via accepting both `transport: string` (single) and
   `SO_REUSEPORT` is used. Needs R&D; defer to WebTransport transport design
   session.
 
-  **Update**: WebTransport is out of scope for the current configuration
+  ~~**Update**: WebTransport is out of scope for the current configuration
   work. It requires a fundamentally different authentication model (HTTP-level
   API keys/session tokens vs SSH key-based auth). The `ServerHandler` only
   knows SSH `auth_publickey`. WebTransport auth would need its own handler
   path. This connects to the broader question of whether `DynamicConfig.auth`
   should be transport-aware (see OQ-CFG-06). WebTransport transport design
-  is a separate R&D session.
+  is a separate R&D session.~~
+
+  **Update 2**: Auth concern is resolved by ADR-023. The same authorized_keys
+  set verifies both SSH pubkey auth and token auth (Ed25519-signed timestamp
+  for WebTransport). One key material, two presentations. The remaining
+  question is purely about QUIC listener coexistence — which is a transport
+  implementation detail, not an auth question. See [auth.md](../architecture/auth.md)
+  and [ADR-023](../architecture/decisions/023-unified-auth-shared-key-material.md).
 
 - **OQ-CFG-05**: Does `TransportKind::WebTransport` need any handler behavior
   different from other transports?
@@ -518,7 +525,7 @@ compat via accepting both `transport: string` (single) and
   headers/query params). The auth question is: does the same `DynamicConfig`
   serve both models, or does each transport carry its own auth config?
 
-  Option A: `AuthPolicy` contains both SSH auth and API key auth:
+  ~~Option A: `AuthPolicy` contains both SSH auth and API key auth:
   ```rust
   pub struct AuthPolicy {
       ssh: SshAuthConfig,           // for SSH-over-any-transport
@@ -536,7 +543,17 @@ compat via accepting both `transport: string` (single) and
 
   For now, the config architecture should accommodate Option A as a future
   extension. Phase 1 implements `DynamicConfig` with SSH auth only. API key
-  auth is added when a non-SSH transport is implemented.
+  auth is added when a non-SSH transport is implemented.~~
+
+  **Resolved by ADR-023**: The auth layer is transport-aware in its
+  *presentation*, not its *material*. `AuthPolicy` holds `SshAuthConfig` and
+  `TokenAuthConfig`, where `TokenAuthConfig.key_source` defaults to
+  `Shared` (same `authorized_keys` set as SSH auth). The same Ed25519 keys
+  serve both paths: SSH presents the public key in the handshake; WebTransport
+  presents an Ed25519-signed timestamp token. Verification produces the same
+  `Identity` type via the `IdentityProvider` trait. One `reloadAuth()` call
+  updates both. See [auth.md](../architecture/auth.md) and
+  [ADR-023](../architecture/decisions/023-unified-auth-shared-key-material.md).
 
 ## Decisions Required
 
@@ -566,3 +583,6 @@ These decisions will be extracted into ADRs when the architecture is finalized:
 - `@alkdev/storage/docs/architecture/sqlite-host.md` — `peer_credentials` table schema
 - [wtransport](https://github.com/BiagioFesta/wtransport) — Rust WebTransport library (in `/workspace/wtransport`)
 - [arc-swap crate](https://docs.rs/arc-swap) — Lock-free read, atomic write for shared state
+- [ADR-023](../architecture/decisions/023-unified-auth-shared-key-material.md) — Unified auth with shared key material
+- [auth.md](../architecture/auth.md) — Unified auth architecture spec
+- [call-protocol.md](../architecture/call-protocol.md) — Bidirectional call protocol spec

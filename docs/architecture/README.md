@@ -1,13 +1,16 @@
 ---
-status: reviewed
-last_updated: 2026-06-02
+status: draft
+last_updated: 2026-06-04
 ---
 
 # Wraith Architecture
 
 ## Current State
 
-Architecture specification reviewed and ready for implementation. 19 ADRs accepted. Configuration architecture under exploration — see [research/configuration.md](../research/configuration.md).
+Architecture specification in active development. 22 ADRs accepted. Unified
+auth and call protocol architecture being specified — see [auth.md](auth.md)
+and [call-protocol.md](call-protocol.md). Configuration architecture under
+exploration — see [research/configuration.md](../research/configuration.md).
 
 ## Architecture Documents
 
@@ -15,6 +18,8 @@ Architecture specification reviewed and ready for implementation. 19 ADRs accept
 |----------|--------|-------------|
 | [overview.md](overview.md) | reviewed | Package purpose, exports, dependencies |
 | [transport.md](transport.md) | reviewed | Transport abstraction: TCP, TLS, iroh |
+| [auth.md](auth.md) | draft | Unified auth: SSH + token, IdentityProvider trait |
+| [call-protocol.md](call-protocol.md) | draft | Bidirectional call/event protocol, operation registry |
 | [client.md](client.md) | reviewed | Client connection, SOCKS5, port forwarding |
 | [server.md](server.md) | reviewed | Server acceptance, channel handling, proxy |
 | [tun-shim.md](tun-shim.md) | deprecated | TUN interface wrapper — **deferred**, use tun2proxy |
@@ -49,11 +54,15 @@ Architecture specification reviewed and ready for implementation. 19 ADRs accept
 | [017](decisions/017-stealth-mode-protocol-multiplexing.md) | Stealth mode — protocol multiplexing on port 443 | Accepted |
 | [018](decisions/018-control-channel-for-pubsub.md) | Control channel for pubsub over SSH | Accepted |
 | [019](decisions/019-proxy-dual-semantics.md) | `--proxy` dual semantics (client vs server) | Accepted |
+| [023](decisions/023-unified-auth-shared-key-material.md) | Unified auth with shared key material + token auth | Accepted |
+| [024](decisions/024-bidirectional-call-protocol.md) | Bidirectional call protocol (EventEnvelope) | Accepted |
+| [025](decisions/025-handler-spec-separation.md) | Handler/spec separation for downstream service registration | Accepted |
 
 ## Open Questions
 
-Most open questions have been resolved. New questions from configuration
-research — see [open-questions.md](open-questions.md) for details.
+Most open questions have been resolved. Open questions remain for
+configuration, auth, and call protocol — see
+[open-questions.md](open-questions.md) for details.
 
 ## Lifecycle Definitions
 
